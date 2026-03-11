@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Settings>
+  <Presets>
+    <Preset Name="Default">
+      <TrimStart>10</TrimStart>
+      <TrimEnd>10</TrimEnd>
+      <CutWidth>4</CutWidth>
+    </Preset>
+    <Preset Name="Основной">
+      <TrimStart>25</TrimStart>
+      <TrimEnd>25</TrimEnd>
+      <CutWidth>4</CutWidth>
+    </Preset>
+  </Presets>
+</Settings>

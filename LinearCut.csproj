@@ -1,8 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net472</TargetFramework>
     <AssemblyName>LinearCut</AssemblyName>
     <RootNamespace>LinearCut</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="Копия %281%29 CutOptimizationForm.cs" />
+    <Compile Remove="Копия %281%29 ExcelIntegration.cs" />
+    <Compile Remove="Копия %281%29 LinearCutOptimizer.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="ExcelDataReader" Version="3.8.0" />
+    <PackageReference Include="ExcelDataReader.DataSet" Version="3.8.0" />
+    <PackageReference Include="MiniExcel" Version="1.42.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
 </Project>

@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "fdaW8eHIx8Q=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\Lerik\\YandexDisk\\templates\\!Programming\\Git\\linear-cut\\LinearCut.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Lerik\\.nuget\\packages\\exceldatareader\\3.8.0\\exceldatareader.3.8.0.nupkg.sha512",
+    "C:\\Users\\Lerik\\.nuget\\packages\\exceldatareader.dataset\\3.8.0\\exceldatareader.dataset.3.8.0.nupkg.sha512",
+    "C:\\Users\\Lerik\\.nuget\\packages\\miniexcel\\1.42.0\\miniexcel.1.42.0.nupkg.sha512",
+    "C:\\Users\\Lerik\\.nuget\\packages\\system.valuetuple\\4.5.0\\system.valuetuple.4.5.0.nupkg.sha512"
+  ],
+  "logs": []
+}

@@ -1,0 +1,11 @@
+<Settings>
+  <TrimStart>10</TrimStart>
+  <TrimEnd>10</TrimEnd>
+  <CutWidth>4</CutWidth>
+  <Presets>
+    <Preset Name="Стандарт">
+      <Stock Item="Профиль А" Lengths="6000,4500" />
+      <Stock Item="Профиль Б" Lengths="3000" />
+    </Preset>
+  </Presets>
+</Settings>

@@ -1,0 +1,16 @@
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\obj\Debug\net472\LinearCut.csproj.AssemblyReference.cache
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\obj\Debug\net472\LinearCut.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\obj\Debug\net472\LinearCut.AssemblyInfoInputs.cache
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\obj\Debug\net472\LinearCut.AssemblyInfo.cs
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\obj\Debug\net472\LinearCut.csproj.CoreCompileInputs.cache
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\obj\Debug\net472\LinearCut.sourcelink.json
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\bin\Debug\net472\LinearCut.exe.config
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\bin\Debug\net472\LinearCut.exe
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\bin\Debug\net472\LinearCut.pdb
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\bin\Debug\net472\ExcelDataReader.dll
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\bin\Debug\net472\ExcelDataReader.DataSet.dll
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\bin\Debug\net472\MiniExcel.dll
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\bin\Debug\net472\System.ValueTuple.dll
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\obj\Debug\net472\LinearCut.csproj.Up2Date
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\obj\Debug\net472\LinearCut.exe
+C:\Users\Lerik\YandexDisk\templates\!Programming\Git\linear-cut\obj\Debug\net472\LinearCut.pdb
