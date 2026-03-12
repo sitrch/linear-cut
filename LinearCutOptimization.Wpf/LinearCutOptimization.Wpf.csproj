@@ -1,28 +1,25 @@
-<Project Sdk=""> 
-  <PropertyGroup> 
-    <OutputType>WinExe</OutputType> 
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion> 
-    <AssemblyName>LinearCutOptimization.Wpf</AssemblyName> 
-    <RootNamespace>LinearCutOptimization.Wpf</RootNamespace> 
-  </PropertyGroup> 
-  <ItemGroup> 
-    <Reference Include="PresentationCore"/> 
-    <Reference Include="PresentationFramework"/> 
-    <Reference Include="WindowsBase"/> 
-    <Reference Include="System.Xaml"/> 
-    <PackageReference Include="MiniExcel" Version="1.42.0" /> 
-    <PackageReference Include="ExcelDataReader" Version="3.8.0" /> 
-    <PackageReference Include="ExcelDataReader.DataSet" Version="3.8.0" /> 
-  </ItemGroup> 
-  <ItemGroup> 
-    <Compile Include="CutOptimizer.cs" Link="CutOptimizer.cs" /> 
-    <Compile Include="CutSettingsProvider.cs" Link="CutSettingsProvider.cs" /> 
-    <Compile Include="Models.cs" Link="Models.cs" /> 
-    <Compile Include="CuttingService.cs" Link="CuttingService.cs" /> 
-  </ItemGroup> 
-  <ItemGroup> 
-    <Page Include="App.xaml" /> 
-    <Page Include="MainWindow.xaml" /> 
-    <Page Include="Views/ColumnRolesGrid.xaml" /> 
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ProjectGuid>{9C7E1B6E-5E5A-4B3C-9D7C-4B0A8F2A0B5A}</ProjectGuid>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MiniExcel" Version="1.42.0" />
+    <PackageReference Include="ExcelDataReader" Version="3.8.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..
+CutOptimizer.cs" />
+    <ApplicationDefinition Include="App.xaml" />
+    <Compile Include="App.xaml.cs" />
+    <Compile Include="MainWindow.xaml.cs" />
+    <Page Include="MainWindow.xaml" />
+    <Compile Include="Views/ColumnRolesGrid.xaml.cs" />
+    <Page Include="Views/ColumnRolesGrid.xaml" />
+    <Compile Include="Mvvm/ViewModelBase.cs" />
+    <Compile Include="Mvvm/RelayCommand.cs" />
+    <Compile Include="Models/ColumnRoleRow.cs" />
   </ItemGroup>
 </Project>
