@@ -3,23 +3,44 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net472</TargetFramework>
     <UseWPF>true</UseWPF>
-    <ProjectGuid>{9C7E1B6E-5E5A-4B3C-9D7C-4B0A8F2A0B5A}</ProjectGuid>
+    <RootNamespace>LinearCutOptimization.Wpf</RootNamespace>
+    <AssemblyName>LinearCutOptimization.Wpf</AssemblyName>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
+
   <ItemGroup>
-    <PackageReference Include="MiniExcel" Version="1.42.0" />
     <PackageReference Include="ExcelDataReader" Version="3.8.0" />
+    <PackageReference Include="ExcelDataReader.DataSet" Version="3.8.0" />
+    <PackageReference Include="MiniExcel" Version="1.42.0" />
   </ItemGroup>
+
+  <!-- shared code from repo root -->
   <ItemGroup>
-    <Compile Include="..
-CutOptimizer.cs" />
+    <Compile Include="..\CutOptimizer.cs" Link="Shared\CutOptimizer.cs" />
+    <Compile Include="..\CutSettingsProvider.cs" Link="Shared\CutSettingsProvider.cs" />
+    <Compile Include="..\Models.cs" Link="Shared\Models.cs" />
+    <Compile Include="..\CuttingService.cs" Link="Shared\CuttingService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ApplicationDefinition Include="App.xaml" />
-    <Compile Include="App.xaml.cs" />
-    <Compile Include="MainWindow.xaml.cs" />
     <Page Include="MainWindow.xaml" />
-    <Compile Include="Views/ColumnRolesGrid.xaml.cs" />
-    <Page Include="Views/ColumnRolesGrid.xaml" />
-    <Compile Include="Mvvm/ViewModelBase.cs" />
-    <Compile Include="Mvvm/RelayCommand.cs" />
-    <Compile Include="Models/ColumnRoleRow.cs" />
+    <Page Include="Views\ColumnRolesGrid.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="App.xaml.cs" DependentUpon="App.xaml" />
+    <Compile Include="MainWindow.xaml.cs" DependentUpon="MainWindow.xaml" />
+    <Compile Include="Views\ColumnRolesGrid.xaml.cs" DependentUpon="ColumnRolesGrid.xaml" />
+
+    <Compile Include="Mvvm\ViewModelBase.cs" />
+    <Compile Include="Mvvm\RelayCommand.cs" />
+    <Compile Include="Models\ColumnRoleRow.cs" />
+
+    <Compile Include="ViewModels\OptimizationTabViewModel.cs" />
+    <Compile Include="ViewModels\MainViewModel.cs" />
+    <Compile Include="ViewModels\MainViewModel.Commands.cs" />
+    <Compile Include="ViewModels\MainViewModel.Excel.cs" />
+    <Compile Include="ViewModels\MainViewModel.ColumnRoles.cs" />
   </ItemGroup>
 </Project>
