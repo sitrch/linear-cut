@@ -5,6 +5,8 @@ VisualStudioVersion = 18.4.11605.240 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LinearCut", "LinearCut.csproj", "{AD7970D9-CB44-400E-5937-866BBF8802B5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LinearCutOptimization.Wpf", "LinearCutOptimization.Wpf\LinearCutOptimization.Wpf.csproj", "{9C7E1B6E-5E5A-4B3C-9D7C-4B0A8F2A0B5A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
