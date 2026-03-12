@@ -1,6 +1,4 @@
-using System;
 using System.Collections.ObjectModel;
-using System.Data;
 using System.Linq;
 using System.Windows;
 using Microsoft.Win32;
@@ -20,21 +18,24 @@ namespace LinearCutOptimization.Wpf.ViewModels
             get => _selectedSheet;
             set
             {
-                if (!Set(ref _selectedSheet, value)) return;
-                if (!string.IsNullOrWhiteSpace(_selectedSheet))
-                    LoadDataFromSheet(_selectedSheet);
+                if (Set(ref _selectedSheet, value))
+                {
+                    if (!string.IsNullOrWhiteSpace(_selectedSheet))
+                        LoadDataFromSheet(_selectedSheet);
+                }
             }
         }
 
-        private void OpenFile()
+        private void OpenExcelFile()
         {
             var ofd = new OpenFileDialog
             {
-                Filter = "Excel files (*.xlsx)|*.xlsx",
-                Title = "Открыть Excel файл"
+                Filter = "Excel (*.xlsx)|*.xlsx",
+                CheckFileExists = true
             };
 
-            if (ofd.ShowDialog() != true) return;
+            if (ofd.ShowDialog() != true)
+                return;
 
             _currentFilePath = ofd.FileName;
 
@@ -47,28 +48,23 @@ namespace LinearCutOptimization.Wpf.ViewModels
 
         private void LoadDataFromSheet(string sheetName)
         {
-            if (string.IsNullOrWhiteSpace(_currentFilePath)) return;
+            if (string.IsNullOrWhiteSpace(_currentFilePath))
+                return;
 
-            try
+            // 1) загрузили исходную таблицу
+            _mainDataTable = MiniExcel.QueryAsDataTable(_currentFilePath, useHeaderRow: true, sheetName: sheetName);
+
+            if (_mainDataTable == null)
             {
-                _mainDataTable = MiniExcel.QueryAsDataTable(_currentFilePath, useHeaderRow: true, sheetName: sheetName);
-                BuildColumnRolesFromTable(_mainDataTable);
-                ProcessDataLogic();
+                MessageBox.Show("Не удалось прочитать Excel.");
+                return;
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Ошибка чтения Excel: " + ex.Message);
-            }
-        }
 
-        private void ImportProject()
-        {
-            MessageBox.Show("Импорт проекта пока не реализован (заглушка).");
-        }
+            // 2) построили список ролей колонок
+            BuildColumnRolesFromTable(_mainDataTable);
 
-        private void ExportProject()
-        {
-            MessageBox.Show("Экспорт пр��екта пока не реализован (заглушка).");
+            // 3) посчитали “после фильтра”
+            ProcessDataLogic();
         }
     }
 }
