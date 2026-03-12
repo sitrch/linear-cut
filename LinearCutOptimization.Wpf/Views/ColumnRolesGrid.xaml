@@ -1,0 +1,36 @@
+<UserControl x:Class="LinearCutOptimization.Wpf.Views.ColumnRolesGrid"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DataGrid ItemsSource="{Binding ColumnRoles}"
+              AutoGenerateColumns="False"
+              CanUserAddRows="False"
+              CanUserDeleteRows="False"
+              HeadersVisibility="Column"
+              RowHeaderWidth="0"
+              MinHeight="200">
+        <DataGrid.Columns>
+            <DataGridTextColumn Header="Столбец" Binding="{Binding ColName}" IsReadOnly="True" Width="*"/>
+            <DataGridCheckBoxColumn Header="Key" Binding="{Binding IsKey, Mode=TwoWay}" Width="70"/>
+
+            <DataGridTemplateColumn Header="Value" Width="80">
+                <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                        <RadioButton GroupName="ValueColumnGroup"
+                                     IsChecked="{Binding IsVal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     HorizontalAlignment="Center"/>
+                    </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+
+            <DataGridTemplateColumn Header="Qty" Width="70">
+                <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                        <RadioButton GroupName="QtyColumnGroup"
+                                     IsChecked="{Binding IsQty, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     HorizontalAlignment="Center"/>
+                    </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+        </DataGrid.Columns>
+    </DataGrid>
+</UserControl>
