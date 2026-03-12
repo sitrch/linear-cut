@@ -1,1 +1,28 @@
-
+<Project Sdk=""> 
+  <PropertyGroup> 
+    <OutputType>WinExe</OutputType> 
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion> 
+    <AssemblyName>LinearCutOptimization.Wpf</AssemblyName> 
+    <RootNamespace>LinearCutOptimization.Wpf</RootNamespace> 
+  </PropertyGroup> 
+  <ItemGroup> 
+    <Reference Include="PresentationCore"/> 
+    <Reference Include="PresentationFramework"/> 
+    <Reference Include="WindowsBase"/> 
+    <Reference Include="System.Xaml"/> 
+    <PackageReference Include="MiniExcel" Version="1.42.0" /> 
+    <PackageReference Include="ExcelDataReader" Version="3.8.0" /> 
+    <PackageReference Include="ExcelDataReader.DataSet" Version="3.8.0" /> 
+  </ItemGroup> 
+  <ItemGroup> 
+    <Compile Include="CutOptimizer.cs" Link="CutOptimizer.cs" /> 
+    <Compile Include="CutSettingsProvider.cs" Link="CutSettingsProvider.cs" /> 
+    <Compile Include="Models.cs" Link="Models.cs" /> 
+    <Compile Include="CuttingService.cs" Link="CuttingService.cs" /> 
+  </ItemGroup> 
+  <ItemGroup> 
+    <Page Include="App.xaml" /> 
+    <Page Include="MainWindow.xaml" /> 
+    <Page Include="Views/ColumnRolesGrid.xaml" /> 
+  </ItemGroup>
+</Project>
