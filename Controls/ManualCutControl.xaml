@@ -1,0 +1,102 @@
+<UserControl x:Class="LinearCutWpf.Controls.ManualCutControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:LinearCutWpf.Controls">
+    
+    <StackPanel>
+        <TextBlock Text="Ручной раскрой:" 
+                   FontWeight="Bold" 
+                   Margin="0,0,0,10"/>
+        
+        <DataGrid x:Name="dgManualCuts"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="True"
+                  CanUserDeleteRows="True"
+                  MinHeight="200"
+                  MaxHeight="250"
+                  CellEditEnding="dgManualCuts_CellEditEnding">
+            <DataGrid.Columns>
+                <!-- Хлыст -->
+                <DataGridTemplateColumn Header="Хлыст" Width="80">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=local:ManualCutControl}, Path=BarLengths}"
+                                      SelectedItem="{Binding BarLength, UpdateSourceTrigger=PropertyChanged}"
+                                      IsSynchronizedWithCurrentItem="False"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                
+                <!-- Размер 1 -->
+                <DataGridTemplateColumn Header="Размер 1" Width="80">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=local:ManualCutControl}, Path=AvailableSizes}"
+                                      SelectedItem="{Binding Size1, UpdateSourceTrigger=PropertyChanged}"
+                                      IsSynchronizedWithCurrentItem="False"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                
+                <!-- Размер 2 -->
+                <DataGridTemplateColumn Header="Размер 2" Width="80">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=local:ManualCutControl}, Path=AvailableSizes}"
+                                      SelectedItem="{Binding Size2, UpdateSourceTrigger=PropertyChanged}"
+                                      IsSynchronizedWithCurrentItem="False"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                
+                <!-- Размер 3 -->
+                <DataGridTemplateColumn Header="Размер 3" Width="80">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=local:ManualCutControl}, Path=AvailableSizes}"
+                                      SelectedItem="{Binding Size3, UpdateSourceTrigger=PropertyChanged}"
+                                      IsSynchronizedWithCurrentItem="False"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                
+                <!-- Размер 4 -->
+                <DataGridTemplateColumn Header="Размер 4" Width="80">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=local:ManualCutControl}, Path=AvailableSizes}"
+                                      SelectedItem="{Binding Size4, UpdateSourceTrigger=PropertyChanged}"
+                                      IsSynchronizedWithCurrentItem="False"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                
+                <!-- Количество -->
+                <DataGridTextColumn Header="Кол-во" 
+                                    Binding="{Binding Count, UpdateSourceTrigger=PropertyChanged}"
+                                    Width="60"/>
+            </DataGrid.Columns>
+            
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Setter Property="Background" Value="White"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasLengthError}" Value="True">
+                            <Setter Property="Background" Value="Red"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding HasCountError}" Value="True">
+                            <Setter Property="Background" Value="LightSalmon"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+        </DataGrid>
+        
+        <!-- Информация об ошибках -->
+        <TextBlock x:Name="txtErrors"
+                   Foreground="Red"
+                   TextWrapping="Wrap"
+                   Margin="0,10,0,0"
+                   Visibility="Collapsed"/>
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "LinearCutWpf": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "workingDirectory": "."
+    }
+  }
+}
