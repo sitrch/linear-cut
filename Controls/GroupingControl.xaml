@@ -7,7 +7,24 @@
              d:DesignHeight="450" d:DesignWidth="800">
     <Grid>
         <TabControl x:Name="groupingTabControl" TabStripPlacement="Top">
-            <!-- Вкладки будут добавляться программно -->
+            <TabControl.Resources>
+                <Style TargetType="TabItem">
+                    <Setter Property="Background" Value="{Binding Path=Background, RelativeSource={RelativeSource Self}}"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="TabItem">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="1,1,1,0"
+                                        Padding="12,6">
+                                    <ContentPresenter ContentSource="Header"
+                                                      HorizontalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </TabControl.Resources>
         </TabControl>
         <TextBlock x:Name="hintText" 
                    Text="Для отображения группировки выберите столбцы «Ключ» и «Значение» на вкладке «Данные»"

@@ -102,7 +102,12 @@ namespace LinearCutWpf.Controls
             cbPreset.SelectionChanged += OnPresetChanged;
 
             // Чекбокс ручного раскроя
-            bool hasManualData = _settings.ManualCuts.Any();
+            bool hasManualData = _settings.ManualCuts.Any(r => 
+                r.BarLength.HasValue || 
+                !string.IsNullOrEmpty(r.Size1) || 
+                !string.IsNullOrEmpty(r.Size2) || 
+                !string.IsNullOrEmpty(r.Size3) || 
+                !string.IsNullOrEmpty(r.Size4));
             chkManual.IsChecked = hasManualData;
 
             _manualCutControl = new ManualCutControl();
@@ -111,13 +116,42 @@ namespace LinearCutWpf.Controls
                 GetEffectiveBarLength(), GetEffectivePresetIndex(),
                 _presets, _vals, _stockLengths.Select(s => s.Length).ToList());
 
+            // Подписываемся на изменения коллекции ручного раскроя
+            manualCuts.CollectionChanged += (s, e) =>
+            {
+                // Подписываемся на PropertyChanged новых элементов
+                if (e.NewItems != null)
+                {
+                    foreach (ManualCutRow item in e.NewItems)
+                        item.PropertyChanged += OnManualCutRowPropertyChanged;
+                }
+                if (e.OldItems != null)
+                {
+                    foreach (ManualCutRow item in e.OldItems)
+                        item.PropertyChanged -= OnManualCutRowPropertyChanged;
+                }
+                // Синхронизируем настройки
+                _settings.ManualCuts = new BindingList<ManualCutRow>(manualCuts);
+                // Обновляем панель ошибок
+                UpdateErrorsPanel();
+                // Подсвечиваем таб после обновления данных
+                SettingsChanged?.Invoke(_articleName);
+                UpdateIndicators();
+            };
+
+            // Подписываемся на PropertyChanged существующих элементов
+            foreach (var row in manualCuts)
+                row.PropertyChanged += OnManualCutRowPropertyChanged;
+
             manualCutFrame.Content = _manualCutControl;
             _manualCutControl.Visibility = hasManualData ? Visibility.Visible : Visibility.Collapsed;
 
-            chkManual.Checked += (s, e) => { _manualCutControl.Visibility = Visibility.Visible; };
-            chkManual.Unchecked += (s, e) => { _manualCutControl.Visibility = Visibility.Collapsed; };
+            chkManual.Checked += (s, e) => { _manualCutControl.Visibility = Visibility.Visible; UpdateIndicators(); };
+            chkManual.Unchecked += (s, e) => { _manualCutControl.Visibility = Visibility.Collapsed; UpdateIndicators(); };
 
             UpdateInfoBlock();
+            UpdateErrorsPanel();
+            UpdateIndicators();
         }
 
         private void BuildRightPanel(DataRow[] articleRows)
@@ -127,12 +161,43 @@ namespace LinearCutWpf.Controls
             foreach (var v in _vals) resDt.Columns.Add(v, typeof(double));
             resDt.Columns.Add("Количество", typeof(double));
 
-            foreach (var sg in articleRows.GroupBy(r => string.Join("|", _vals.Select(v => r[v]?.ToString()))))
+            // Группируем по комбинации ключей и значений, чтобы не терять строки с разными ключами
+            var groupKeys = _keys.Concat(_vals).ToList();
+            foreach (var sg in articleRows.GroupBy(r => string.Join("|", groupKeys.Select(k => r[k]?.ToString()))))
             {
                 DataRow nr = resDt.NewRow();
                 foreach (var k in _keys) nr[k] = sg.First()[k];
                 foreach (var v in _vals) nr[v] = sg.First()[v];
-                nr["Количество"] = sg.Sum(r => !string.IsNullOrEmpty(_qty) ? Convert.ToDouble(r[_qty] == DBNull.Value ? 0 : r[_qty]) : 1.0);
+                
+                double qtySum = 0;
+                System.Diagnostics.Debug.WriteLine($"BuildRightPanel: _qty='{_qty}'");
+                if (!string.IsNullOrEmpty(_qty))
+                {
+                    System.Diagnostics.Debug.WriteLine($"BuildRightPanel: Processing {sg.Count()} rows for qty");
+                    foreach (var r in sg)
+                    {
+                        var qtyVal = r[_qty];
+                        System.Diagnostics.Debug.WriteLine($"BuildRightPanel: qtyVal='{qtyVal}' (type={qtyVal?.GetType().Name})");
+                        if (qtyVal != DBNull.Value && !string.IsNullOrWhiteSpace(qtyVal?.ToString()))
+                        {
+                            if (double.TryParse(qtyVal.ToString(), out double q))
+                            {
+                                qtySum += q;
+                                System.Diagnostics.Debug.WriteLine($"BuildRightPanel: Parsed q={q}, qtySum={qtySum}");
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"BuildRightPanel: FAILED to parse '{qtyVal}'");
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"BuildRightPanel: _qty is null or empty!");
+                }
+                
+                nr["Количество"] = qtySum;
                 resDt.Rows.Add(nr);
             }
 
@@ -217,6 +282,20 @@ namespace LinearCutWpf.Controls
             }
         }
 
+        private void OnManualCutRowPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ManualCutRow.BarLength) ||
+                e.PropertyName == nameof(ManualCutRow.Size1) ||
+                e.PropertyName == nameof(ManualCutRow.Size2) ||
+                e.PropertyName == nameof(ManualCutRow.Size3) ||
+                e.PropertyName == nameof(ManualCutRow.Size4) ||
+                e.PropertyName == nameof(ManualCutRow.Count))
+            {
+                SettingsChanged?.Invoke(_articleName);
+                UpdateErrorsPanel();
+            }
+        }
+
         private void UpdateInfoBlock()
         {
             if (infoLabel == null) return;
@@ -237,7 +316,16 @@ namespace LinearCutWpf.Controls
                     if (valObj == DBNull.Value || string.IsNullOrWhiteSpace(valObj?.ToString())) continue;
                     double l = Convert.ToDouble(valObj);
                     double lWithCut = l + preset.CutWidth;
-                    int c = string.IsNullOrEmpty(_qty) ? 1 : Convert.ToInt32(row[_qty] == DBNull.Value ? 1 : row[_qty]);
+                    int c = 1;
+                    if (!string.IsNullOrEmpty(_qty))
+                    {
+                        var qtyObj = row[_qty];
+                        if (qtyObj != DBNull.Value && !string.IsNullOrWhiteSpace(qtyObj?.ToString()))
+                        {
+                            if (double.TryParse(qtyObj.ToString(), out double q))
+                                c = (int)q;
+                        }
+                    }
                     for (int i = 0; i < c; i++)
                     {
                         parts.Add(lWithCut);
@@ -252,6 +340,40 @@ namespace LinearCutWpf.Controls
                               $"Хлыст: {barLen} мм, пресет: {preset.Name}\n" +
                               $"Отступ: {preset.TrimStart}-{preset.TrimEnd}, рез: {preset.CutWidth} мм\n" +
                               $"\n(Результаты оптимизации — на вкладке «Результаты»)";
+
+            UpdateIndicators();
+        }
+
+        private void UpdateIndicators()
+        {
+            bool isDefaultBar = !_settings.BarLength.HasValue;
+            bool isDefaultPreset = _settings.Preset == null;
+            bool isDefaultManual = !_settings.ManualCuts.Any(r =>
+                r.BarLength.HasValue ||
+                !string.IsNullOrEmpty(r.Size1) ||
+                !string.IsNullOrEmpty(r.Size2) ||
+                !string.IsNullOrEmpty(r.Size3) ||
+                !string.IsNullOrEmpty(r.Size4));
+
+            var indicatorBar = FindName("indicatorBar") as TextBlock;
+            var indicatorPreset = FindName("indicatorPreset") as TextBlock;
+            var indicatorManual = FindName("indicatorManual") as TextBlock;
+
+            if (indicatorBar != null)
+            {
+                indicatorBar.Text = isDefaultBar ? "✓" : "●";
+                indicatorBar.Foreground = isDefaultBar ? Brushes.Green : Brushes.Red;
+            }
+            if (indicatorPreset != null)
+            {
+                indicatorPreset.Text = isDefaultPreset ? "✓" : "●";
+                indicatorPreset.Foreground = isDefaultPreset ? Brushes.Green : Brushes.Red;
+            }
+            if (indicatorManual != null)
+            {
+                indicatorManual.Text = isDefaultManual ? "✓" : "●";
+                indicatorManual.Foreground = isDefaultManual ? Brushes.Green : Brushes.Red;
+            }
         }
     }
 }

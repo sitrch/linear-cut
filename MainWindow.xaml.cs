@@ -43,8 +43,6 @@ namespace LinearCutWpf
 
         private void OnSettingsChanged(object sender, System.EventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("OnSettingsChanged called");
-            
             // Находим TabControl
             var tabControl = (TabControl)FindName("tabControl");
             if (tabControl == null) return;
@@ -62,9 +60,8 @@ namespace LinearCutWpf
 
         private void UpdateGrouping()
         {
-            System.Diagnostics.Debug.WriteLine($"UpdateGrouping called: MainDataTable={dataSettingsControl.MainDataTable != null}");
-            
-            if (groupingControl == null || dataSettingsControl.MainDataTable == null) return;
+            if (groupingControl == null || dataSettingsControl.MainDataTable == null)
+                return;
 
             groupingControl.Initialize(
                 dataSettingsControl.DefaultBarLength,

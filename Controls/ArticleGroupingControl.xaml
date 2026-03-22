@@ -11,18 +11,27 @@
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="10">
+        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="10" Background="#F0F0F0">
             <StackPanel x:Name="leftPanel">
                 <!-- Хлыст -->
-                <Label Content="Хлыст:" FontWeight="Bold" Margin="0,10,0,0"/>
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock x:Name="indicatorBar" Text="✓" Foreground="Green" FontSize="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <Label Content="Хлыст:" FontWeight="Bold"/>
+                </StackPanel>
                 <ComboBox x:Name="cbBarLength" Width="200" Margin="0,5,0,0"/>
 
                 <!-- Пресет -->
-                <Label Content="Пресет:" FontWeight="Bold" Margin="0,10,0,0"/>
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock x:Name="indicatorPreset" Text="✓" Foreground="Green" FontSize="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <Label Content="Пресет:" FontWeight="Bold"/>
+                </StackPanel>
                 <ComboBox x:Name="cbPreset" Width="200" Margin="0,5,0,0"/>
 
                 <!-- Чекбокс ручного раскроя -->
-                <CheckBox x:Name="chkManual" Content="Ручной раскрой" FontWeight="Bold" Margin="0,15,0,0"/>
+                <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                    <TextBlock x:Name="indicatorManual" Text="✓" Foreground="Green" FontSize="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <CheckBox x:Name="chkManual" Content="Ручной раскрой" FontWeight="Bold"/>
+                </StackPanel>
 
                 <!-- ManualCutControl -->
                 <Frame x:Name="manualCutFrame" Width="390" Margin="0,5,0,0"/>
@@ -39,7 +48,7 @@
 
                 <!-- Info label -->
                 <TextBlock x:Name="infoLabel" Width="390" Margin="0,10,0,0"
-                           FontFamily="Consolas" FontSize="9" TextWrapping="Wrap"/>
+                           FontFamily="Consolas" FontSize="12" Foreground="Black" TextWrapping="Wrap"/>
             </StackPanel>
         </ScrollViewer>
 

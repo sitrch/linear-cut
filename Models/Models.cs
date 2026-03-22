@@ -112,8 +112,16 @@ namespace LinearCutWpf.Models
             bool barChanged = BarLength.HasValue && BarLength.Value != defaultBar;
             bool presetChanged = Preset != null && defaultPreset != null && Preset.Name != defaultPreset.Name;
             bool presetSet = Preset != null && defaultPreset == null;
-            bool hasManualCuts = ManualCuts != null && ManualCuts.Any();
-            return barChanged || presetChanged || presetSet || hasManualCuts;
+            // Проверяем, что ручной раскрой не пустой (есть хотя бы одна заполненная строка)
+            bool hasManualCuts = ManualCuts != null && ManualCuts.Any(r => 
+                r.BarLength.HasValue || 
+                !string.IsNullOrEmpty(r.Size1) || 
+                !string.IsNullOrEmpty(r.Size2) || 
+                !string.IsNullOrEmpty(r.Size3) || 
+                !string.IsNullOrEmpty(r.Size4));
+            bool result = barChanged || presetChanged || presetSet || hasManualCuts;
+            System.Diagnostics.Debug.WriteLine($"HasCustomSettings: {ArticleName} - barChanged={barChanged}, presetChanged={presetChanged}, presetSet={presetSet}, hasManualCuts={hasManualCuts} => {result}");
+            return result;
         }
     }
 

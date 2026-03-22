@@ -114,24 +114,18 @@ namespace LinearCutWpf.Controls
 
         public void RunGroupingWithTabs()
         {
-            if (_gridInput == null) 
-            {
-                System.Diagnostics.Debug.WriteLine("RunGroupingWithTabs: _gridInput is null");
-                return;
-            }
+            if (_gridInput == null) return;
 
             var keys = _getCheckedCols("IsKey");
             var vals = _getCheckedCols("IsVal");
-            var qty = _getCheckedCols("IsQty").FirstOrDefault();
-
-            System.Diagnostics.Debug.WriteLine($"RunGroupingWithTabs: keys={string.Join(",", keys)}, vals={string.Join(",", vals)}, qty={qty}");
+            var qtyList = _getCheckedCols("IsQty");
+            var qty = qtyList.FirstOrDefault();
 
             _groupingTabControl.Items.Clear();
             _tabToArticle.Clear();
             _articleGroupingControls.Clear();
             if (!keys.Any() || !vals.Any())
             {
-                System.Diagnostics.Debug.WriteLine("RunGroupingWithTabs: no keys or vals, showing hint");
                 UpdateHintVisibility();
                 return;
             }
@@ -146,7 +140,7 @@ namespace LinearCutWpf.Controls
 
                 TabItem tp = new TabItem();
                 tp.Header = articleName;
-                tp.Background = isCustom ? Brushes.MistyRose : SystemColors.ControlBrush;
+                tp.Background = isCustom ? Brushes.MistyRose : Brushes.White;
                 _tabToArticle[tp] = articleName;
 
                 DataRow[] articleRows = g.ToArray();
@@ -177,10 +171,21 @@ namespace LinearCutWpf.Controls
             {
                 if (kvp.Value == articleName)
                 {
+                    var tabItem = kvp.Key;
                     var settings = GetOrCreateArticleSettings(articleName);
-                    kvp.Key.Background = settings.HasCustomSettings(_defaultBarLength, _defaultPreset)
-                        ? Brushes.MistyRose
-                        : SystemColors.ControlBrush;
+                    var hasCustom = settings.HasCustomSettings(_defaultBarLength, _defaultPreset);
+                    
+                    if (hasCustom)
+                    {
+                        tabItem.Background = Brushes.MistyRose;
+                        tabItem.Foreground = Brushes.DarkRed;
+                    }
+                    else
+                    {
+                        tabItem.Background = Brushes.White;
+                        tabItem.Foreground = SystemColors.ControlTextBrush;
+                    }
+                    tabItem.UpdateLayout();
                 }
             }
         }

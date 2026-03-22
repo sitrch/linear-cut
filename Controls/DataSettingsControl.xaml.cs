@@ -198,10 +198,11 @@ namespace LinearCutWpf.Controls
         public List<string> GetCheckedCols(string colType)
         {
             if (_columnConfigTable == null) return new List<string>();
-            return _columnConfigTable.AsEnumerable()
+            var result = _columnConfigTable.AsEnumerable()
                 .Where(r => r[colType] != DBNull.Value && (bool)r[colType])
                 .Select(r => r["ColName"].ToString())
                 .ToList();
+            return result;
         }
 
         private void OnDgInputLoadingRow(object sender, DataGridRowEventArgs e)
@@ -232,9 +233,6 @@ namespace LinearCutWpf.Controls
                 // Используем Dispatcher для обработки после изменения значения чекбокса
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    var keys = GetCheckedCols("IsKey");
-                    var vals = GetCheckedCols("IsVal");
-                    System.Diagnostics.Debug.WriteLine($"OnColumnConfigPreviewMouseLeftButtonDown: keys={string.Join(",", keys)}, vals={string.Join(",", vals)}");
                     RefreshColumnsVisuals();
                     ProcessDataLogic();
                     SettingsChanged?.Invoke(this, EventArgs.Empty);
@@ -247,8 +245,6 @@ namespace LinearCutWpf.Controls
             // После изменения значения чекбокса обновляем визуал
             if (e.Column is DataGridCheckBoxColumn)
             {
-                System.Diagnostics.Debug.WriteLine($"OnColumnConfigCellEditEnding: column={e.Column.Header}");
-                
                 // Принудительно фиксируем изменение в DataTable
                 dgColumnConfig.CommitEdit();
                 
@@ -257,9 +253,6 @@ namespace LinearCutWpf.Controls
                 {
                     RefreshColumnsVisuals();
                     ProcessDataLogic();
-                    var keys = GetCheckedCols("IsKey");
-                    var vals = GetCheckedCols("IsVal");
-                    System.Diagnostics.Debug.WriteLine($"SettingsChanged firing: keys={string.Join(",", keys)}, vals={string.Join(",", vals)}");
                     SettingsChanged?.Invoke(this, EventArgs.Empty);
                 }), System.Windows.Threading.DispatcherPriority.Render);
             }
