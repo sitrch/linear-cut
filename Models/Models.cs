@@ -105,7 +105,7 @@ namespace LinearCutWpf.Models
         public string ArticleName { get; set; }
         public double? BarLength { get; set; }
         public PresetModel Preset { get; set; }
-        public BindingList<ManualCutRow> ManualCuts { get; set; } = new BindingList<ManualCutRow>();
+        public System.Collections.ObjectModel.ObservableCollection<ManualCutRow> ManualCuts { get; set; } = new System.Collections.ObjectModel.ObservableCollection<ManualCutRow>();
 
         public bool HasCustomSettings(double defaultBar, PresetModel defaultPreset)
         {
@@ -119,9 +119,7 @@ namespace LinearCutWpf.Models
                 !string.IsNullOrEmpty(r.Size2) || 
                 !string.IsNullOrEmpty(r.Size3) || 
                 !string.IsNullOrEmpty(r.Size4));
-            bool result = barChanged || presetChanged || presetSet || hasManualCuts;
-            System.Diagnostics.Debug.WriteLine($"HasCustomSettings: {ArticleName} - barChanged={barChanged}, presetChanged={presetChanged}, presetSet={presetSet}, hasManualCuts={hasManualCuts} => {result}");
-            return result;
+            return barChanged || presetChanged || presetSet || hasManualCuts;
         }
     }
 

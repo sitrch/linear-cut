@@ -111,37 +111,31 @@ namespace LinearCutWpf.Controls
             chkManual.IsChecked = hasManualData;
 
             _manualCutControl = new ManualCutControl();
-            var manualCuts = new ObservableCollection<ManualCutRow>(_settings.ManualCuts);
+            
+            // Если коллекция вдруг null (хотя инициализируется в модели), создадим её
+            if (_settings.ManualCuts == null)
+                _settings.ManualCuts = new ObservableCollection<ManualCutRow>();
+                
+            var manualCuts = _settings.ManualCuts;
+            
             _manualCutControl.Initialize(_articleName, manualCuts,
                 GetEffectiveBarLength(), GetEffectivePresetIndex(),
                 _presets, _vals, _stockLengths.Select(s => s.Length).ToList());
 
             // Подписываемся на изменения коллекции ручного раскроя
-            manualCuts.CollectionChanged += (s, e) =>
-            {
-                // Подписываемся на PropertyChanged новых элементов
-                if (e.NewItems != null)
-                {
-                    foreach (ManualCutRow item in e.NewItems)
-                        item.PropertyChanged += OnManualCutRowPropertyChanged;
-                }
-                if (e.OldItems != null)
-                {
-                    foreach (ManualCutRow item in e.OldItems)
-                        item.PropertyChanged -= OnManualCutRowPropertyChanged;
-                }
-                // Синхронизируем настройки
-                _settings.ManualCuts = new BindingList<ManualCutRow>(manualCuts);
-                // Обновляем панель ошибок
-                UpdateErrorsPanel();
-                // Подсвечиваем таб после обновления данных
-                SettingsChanged?.Invoke(_articleName);
-                UpdateIndicators();
-            };
+            manualCuts.CollectionChanged += OnManualCutsCollectionChanged;
 
             // Подписываемся на PropertyChanged существующих элементов
             foreach (var row in manualCuts)
                 row.PropertyChanged += OnManualCutRowPropertyChanged;
+            
+            // Отписка при выгрузке (предотвращение утечки памяти)
+            this.Unloaded += (s, e) =>
+            {
+                manualCuts.CollectionChanged -= OnManualCutsCollectionChanged;
+                foreach (var row in manualCuts)
+                    row.PropertyChanged -= OnManualCutRowPropertyChanged;
+            };
 
             manualCutFrame.Content = _manualCutControl;
             _manualCutControl.Visibility = hasManualData ? Visibility.Visible : Visibility.Collapsed;
@@ -151,6 +145,26 @@ namespace LinearCutWpf.Controls
 
             UpdateInfoBlock();
             UpdateErrorsPanel();
+            UpdateIndicators();
+        }
+
+        private void OnManualCutsCollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            // Подписываемся на PropertyChanged новых элементов
+            if (e.NewItems != null)
+            {
+                foreach (ManualCutRow item in e.NewItems)
+                    item.PropertyChanged += OnManualCutRowPropertyChanged;
+            }
+            if (e.OldItems != null)
+            {
+                foreach (ManualCutRow item in e.OldItems)
+                    item.PropertyChanged -= OnManualCutRowPropertyChanged;
+            }
+            // Обновляем панель ошибок
+            UpdateErrorsPanel();
+            // Подсвечиваем таб после обновления данных
+            SettingsChanged?.Invoke(_articleName);
             UpdateIndicators();
         }
 
@@ -170,31 +184,19 @@ namespace LinearCutWpf.Controls
                 foreach (var v in _vals) nr[v] = sg.First()[v];
                 
                 double qtySum = 0;
-                System.Diagnostics.Debug.WriteLine($"BuildRightPanel: _qty='{_qty}'");
                 if (!string.IsNullOrEmpty(_qty))
                 {
-                    System.Diagnostics.Debug.WriteLine($"BuildRightPanel: Processing {sg.Count()} rows for qty");
                     foreach (var r in sg)
                     {
                         var qtyVal = r[_qty];
-                        System.Diagnostics.Debug.WriteLine($"BuildRightPanel: qtyVal='{qtyVal}' (type={qtyVal?.GetType().Name})");
                         if (qtyVal != DBNull.Value && !string.IsNullOrWhiteSpace(qtyVal?.ToString()))
                         {
                             if (double.TryParse(qtyVal.ToString(), out double q))
                             {
                                 qtySum += q;
-                                System.Diagnostics.Debug.WriteLine($"BuildRightPanel: Parsed q={q}, qtySum={qtySum}");
-                            }
-                            else
-                            {
-                                System.Diagnostics.Debug.WriteLine($"BuildRightPanel: FAILED to parse '{qtyVal}'");
                             }
                         }
                     }
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"BuildRightPanel: _qty is null or empty!");
                 }
                 
                 nr["Количество"] = qtySum;
