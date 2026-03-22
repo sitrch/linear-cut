@@ -148,14 +148,9 @@ namespace LinearCutWpf.Controls
                 dgColumnConfig.ItemsSource = _columnConfigTable.DefaultView;
                 ProcessDataLogic();
 
-                // Подписываемся на изменения данных в DataTable для обновления цветов
-                _columnConfigTable.ColumnChanged += (s, ev) =>
-                {
-                    dgInput.Dispatcher.BeginInvoke(new Action(() =>
-                    {
-                        RefreshColumnsVisuals();
-                    }), System.Windows.Threading.DispatcherPriority.Background);
-                };
+                // Подписываемся на изменения данных в DataTable для обновления цветов и логики "радиокнопок"
+                _columnConfigTable.ColumnChanged -= OnColumnConfigChanged;
+                _columnConfigTable.ColumnChanged += OnColumnConfigChanged;
 
                 DataLoaded?.Invoke(this, EventArgs.Empty);
             }
@@ -680,16 +675,53 @@ namespace LinearCutWpf.Controls
                 _columnConfigTable = columnConfig;
                 dgColumnConfig.ItemsSource = _columnConfigTable.DefaultView;
 
-                // Подписываемся на изменения данных в DataTable для обновления цветов
-                _columnConfigTable.ColumnChanged += (s, ev) =>
-                {
-                    dgInput.Dispatcher.BeginInvoke(new Action(() =>
-                    {
-                        RefreshColumnsVisuals();
-                    }), System.Windows.Threading.DispatcherPriority.Background);
-                };
+                // Подписываемся на изменения данных в DataTable для обновления цветов и логики "радиокнопок"
+                _columnConfigTable.ColumnChanged -= OnColumnConfigChanged;
+                _columnConfigTable.ColumnChanged += OnColumnConfigChanged;
             }
             ProcessDataLogic();
+        }
+
+        private bool _isHandlingColumnChange = false;
+
+        private void OnColumnConfigChanged(object sender, DataColumnChangeEventArgs e)
+        {
+            if (_isHandlingColumnChange) return;
+
+            if (e.Column.ColumnName == "IsKey" || e.Column.ColumnName == "IsVal" || e.Column.ColumnName == "IsQty")
+            {
+                if (e.ProposedValue is bool isChecked && isChecked)
+                {
+                    _isHandlingColumnChange = true;
+                    try
+                    {
+                        if (e.Column.ColumnName == "IsKey")
+                        {
+                            e.Row["IsVal"] = false;
+                            e.Row["IsQty"] = false;
+                        }
+                        else if (e.Column.ColumnName == "IsVal")
+                        {
+                            e.Row["IsKey"] = false;
+                            e.Row["IsQty"] = false;
+                        }
+                        else if (e.Column.ColumnName == "IsQty")
+                        {
+                            e.Row["IsKey"] = false;
+                            e.Row["IsVal"] = false;
+                        }
+                    }
+                    finally
+                    {
+                        _isHandlingColumnChange = false;
+                    }
+                }
+
+                dgInput.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    RefreshColumnsVisuals();
+                }), System.Windows.Threading.DispatcherPriority.Background);
+            }
         }
 
         /// <summary>

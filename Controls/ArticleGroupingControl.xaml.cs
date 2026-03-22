@@ -171,9 +171,22 @@ namespace LinearCutWpf.Controls
         private void BuildRightPanel(DataRow[] articleRows)
         {
             DataTable resDt = new DataTable();
-            foreach (var k in _keys) resDt.Columns.Add(k);
-            foreach (var v in _vals) resDt.Columns.Add(v, typeof(double));
-            resDt.Columns.Add("Количество", typeof(double));
+            
+            // Защита от DuplicateNameException при добавлении колонок
+            foreach (var k in _keys)
+            {
+                if (!resDt.Columns.Contains(k))
+                    resDt.Columns.Add(k);
+            }
+            foreach (var v in _vals)
+            {
+                if (!resDt.Columns.Contains(v))
+                    resDt.Columns.Add(v, typeof(double));
+            }
+            if (!resDt.Columns.Contains("Количество"))
+            {
+                resDt.Columns.Add("Количество", typeof(double));
+            }
 
             // Группируем по комбинации ключей и значений, чтобы не терять строки с разными ключами
             var groupKeys = _keys.Concat(_vals).ToList();
