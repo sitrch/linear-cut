@@ -27,10 +27,12 @@
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="tabBorder" Property="BorderThickness" Value="1,1,1,0"/>
                                 <Setter TargetName="tabBorder" Property="Margin" Value="2,0,2,-1"/>
+                                <Setter TargetName="tabBorder" Property="Background" Value="LightBlue"/>
                                 <Setter Property="Foreground" Value="#333333"/>
                                 <Setter Property="FontWeight" Value="Bold"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="False">
+                                <Setter TargetName="tabBorder" Property="Background" Value="White"/>
                                 <Setter Property="Foreground" Value="#333333"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -42,19 +44,23 @@
     
     <Grid>
 <TabControl x:Name="tabControl" TabStripPlacement="Top" 
+                    SelectionChanged="TabControl_SelectionChanged"
                     ItemContainerStyle="{StaticResource TabHeaderStyle}"
                     Background="White">
 <TabItem Header="Данные">
                 <controls:DataSettingsControl x:Name="dataSettingsControl"/>
             </TabItem>
+            <TabItem Header="Настройка артикулов">
+                <controls:ArticleSettingsControl x:Name="articleSettingsControl"/>
+            </TabItem>
             <TabItem Header="Группировка">
                 <controls:GroupingControl x:Name="groupingControl"/>
             </TabItem>
-            <TabItem Header="Результаты">
+            <TabItem Header="Раскрой">
                 <controls:ResultsControl x:Name="resultsControl"/>
             </TabItem>
-            <TabItem Header="Ручной раскрой">
-                <controls:ManualCutControl x:Name="manualCutControl"/>
+            <TabItem Header="Сохранение">
+                <controls:ExportControl x:Name="exportControl"/>
             </TabItem>
         </TabControl>
     </Grid>

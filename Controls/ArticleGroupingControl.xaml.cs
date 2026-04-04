@@ -11,8 +11,28 @@ using LinearCutWpf.Models;
 
 namespace LinearCutWpf.Controls
 {
+    /// <summary>
+    /// Контрол для отображения и настройки группировки деталей конкретного артикула.
+    /// Позволяет задать хлыст, пресет обрезки, параметры ручного раскроя, а также просмотреть детализацию.
+    /// </summary>
     public partial class ArticleGroupingControl : UserControl
     {
+        /// <summary>
+        /// Свойство зависимости для ширины левой панели.
+        /// </summary>
+        public static readonly DependencyProperty LeftPanelWidthProperty =
+            DependencyProperty.Register("LeftPanelWidth", typeof(GridLength), typeof(ArticleGroupingControl),
+                new PropertyMetadata(new GridLength(420)));
+
+        /// <summary>
+        /// Ширина левой панели.
+        /// </summary>
+        public GridLength LeftPanelWidth
+        {
+            get => (GridLength)GetValue(LeftPanelWidthProperty);
+            set => SetValue(LeftPanelWidthProperty, value);
+        }
+
         private string _articleName;
         private ArticleSettings _settings;
         private double _defaultBarLength;
@@ -24,10 +44,18 @@ namespace LinearCutWpf.Controls
         private List<string> _keys;
         private List<string> _vals;
         private string _qty;
+        private DataRow[] _articleRows;
 
         private ManualCutControl _manualCutControl;
 
+        /// <summary>
+        /// Контрол ручного раскроя, связанный с данным артикулом.
+        /// </summary>
         public ManualCutControl ManualCutControl => _manualCutControl;
+        
+        /// <summary>
+        /// Таблица детализации артикула (доступные размеры и количество).
+        /// </summary>
         public DataGrid GridDetails => gridDetails;
 
         /// <summary>
@@ -35,6 +63,9 @@ namespace LinearCutWpf.Controls
         /// </summary>
         public event Action<string> SettingsChanged;
 
+        /// <summary>
+        /// Инициализирует новый экземпляр класса <see cref="ArticleGroupingControl"/>.
+        /// </summary>
         public ArticleGroupingControl()
         {
             InitializeComponent();
@@ -61,11 +92,15 @@ namespace LinearCutWpf.Controls
             _keys = keys;
             _vals = vals;
             _qty = qty;
+            _articleRows = articleRows;
 
             BuildLeftPanel();
-            BuildRightPanel(articleRows);
+            BuildRightPanel(_articleRows);
         }
 
+        /// <summary>
+        /// Строит левую панель настроек: выпадающие списки хлыста и пресета, контрол ручного раскроя.
+        /// </summary>
         private void BuildLeftPanel()
         {
             // Хлыст
@@ -118,9 +153,43 @@ namespace LinearCutWpf.Controls
                 
             var manualCuts = _settings.ManualCuts;
             
-            _manualCutControl.Initialize(_articleName, manualCuts,
-                GetEffectiveBarLength(), GetEffectivePresetIndex(),
-                _presets, _vals, _stockLengths.Select(s => s.Length).ToList());
+            var preset = GetEffectivePreset();
+
+            // Сбор деталей для доступных размеров
+            var itemSizes = new List<string>();
+            var itemQuantities = new List<int>();
+
+            if (_articleRows != null && _vals.Any())
+            {
+                foreach (DataRow row in _articleRows)
+                {
+                    var valObj = row[_vals.First()];
+                    if (valObj == DBNull.Value || string.IsNullOrWhiteSpace(valObj?.ToString())) continue;
+                    
+                    string valStr = valObj.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                    if (double.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out double l) && l > 0)
+                    {
+                        itemSizes.Add(l.ToString());
+                        int c = 1;
+                        if (!string.IsNullOrEmpty(_qty))
+                        {
+                            var qtyObj = row[_qty];
+                            if (qtyObj != DBNull.Value && !string.IsNullOrWhiteSpace(qtyObj?.ToString()))
+                            {
+                                string qtyStr = qtyObj.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                                if (double.TryParse(qtyStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out double q) && q > 0)
+                                    c = (int)q;
+                            }
+                        }
+                        itemQuantities.Add(c);
+                    }
+                }
+            }
+
+            _manualCutControl.ViewModel.Initialize(manualCuts,
+                GetEffectiveBarLength(), preset,
+                new List<string>(), _stockLengths.Select(s => s.Length).ToList(),
+                itemSizes, itemQuantities);
 
             // Подписываемся на изменения коллекции ручного раскроя
             manualCuts.CollectionChanged += OnManualCutsCollectionChanged;
@@ -148,6 +217,9 @@ namespace LinearCutWpf.Controls
             UpdateIndicators();
         }
 
+        /// <summary>
+        /// Обработчик изменения коллекции ручного раскроя.
+        /// </summary>
         private void OnManualCutsCollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
             // Подписываемся на PropertyChanged новых элементов
@@ -168,35 +240,28 @@ namespace LinearCutWpf.Controls
             UpdateIndicators();
         }
 
+        /// <summary>
+        /// Строит правую панель детализации: группирует строки и выводит сводку по деталям артикула.
+        /// </summary>
         private void BuildRightPanel(DataRow[] articleRows)
         {
-            DataTable resDt = new DataTable();
-            
-            // Защита от DuplicateNameException при добавлении колонок
-            foreach (var k in _keys)
-            {
-                if (!resDt.Columns.Contains(k))
-                    resDt.Columns.Add(k);
-            }
-            foreach (var v in _vals)
-            {
-                if (!resDt.Columns.Contains(v))
-                    resDt.Columns.Add(v, typeof(double));
-            }
-            if (!resDt.Columns.Contains("Количество"))
-            {
-                resDt.Columns.Add("Количество", typeof(double));
-            }
+            var partsList = new ObservableCollection<PartItem>();
 
-            // Группируем по комбинации ключей и значений, чтобы не терять строки с разными ключами
+            // Группируем по комбинации ключей и значений, чтобы схлопнуть одинаковые детали
             var groupKeys = _keys.Concat(_vals).ToList();
             foreach (var sg in articleRows.GroupBy(r => string.Join("|", groupKeys.Select(k => r[k]?.ToString()))))
             {
-                DataRow nr = resDt.NewRow();
-                foreach (var k in _keys) nr[k] = sg.First()[k];
-                foreach (var v in _vals) nr[v] = sg.First()[v];
+                var firstRow = sg.First();
+                string article = DataHelper.GetArticleName(_keys.Select(k => firstRow[k]?.ToString()));
                 
-                double qtySum = 0;
+                double length = 0;
+                if (_vals.Any() && firstRow[_vals.First()] != DBNull.Value)
+                {
+                    string valStr = firstRow[_vals.First()].ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                    double.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out length);
+                }
+
+                int qtySum = 0;
                 if (!string.IsNullOrEmpty(_qty))
                 {
                     foreach (var r in sg)
@@ -204,20 +269,30 @@ namespace LinearCutWpf.Controls
                         var qtyVal = r[_qty];
                         if (qtyVal != DBNull.Value && !string.IsNullOrWhiteSpace(qtyVal?.ToString()))
                         {
-                            if (double.TryParse(qtyVal.ToString(), out double q))
+                            string qtyStr = qtyVal.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                            if (double.TryParse(qtyStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out double q) && q > 0)
                             {
-                                qtySum += q;
+                                qtySum += (int)q;
                             }
                         }
                     }
                 }
-                
-                nr["Количество"] = qtySum;
-                resDt.Rows.Add(nr);
+                else
+                {
+                    qtySum = sg.Count(); // Если колонки количества нет, считаем строки
+                }
+
+                partsList.Add(new PartItem
+                {
+                    Article = article,
+                    Length = length,
+                    Count = qtySum
+                });
             }
 
-            resDt.DefaultView.Sort = $"{_vals.First()} DESC";
-            gridDetails.ItemsSource = resDt.DefaultView;
+            // Сортировка по длине по убыванию
+            var sortedParts = partsList.OrderByDescending(p => p.Length).ToList();
+            gridDetails.ItemsSource = sortedParts;
         }
 
         private void OnBarLengthChanged(object sender, SelectionChangedEventArgs e)
@@ -257,11 +332,18 @@ namespace LinearCutWpf.Controls
             return 0;
         }
 
+        /// <summary>
+        /// Проверяет наличие ошибок в ручном раскрое.
+        /// </summary>
+        /// <returns>True, если есть ошибки, иначе false.</returns>
         public bool HasManualErrors()
         {
-            return _manualCutControl != null && _manualCutControl.HasErrors();
+            return _manualCutControl != null && _manualCutControl.ViewModel.HasErrorsText;
         }
 
+        /// <summary>
+        /// Обновляет параметры валидации в сетке ручного раскроя при изменении хлыста или пресета.
+        /// </summary>
         private void RefreshManualGridValidation()
         {
             var preset = GetEffectivePreset();
@@ -269,13 +351,17 @@ namespace LinearCutWpf.Controls
 
             if (_manualCutControl != null)
             {
-                _manualCutControl.UpdateValidationParams(GetEffectiveBarLength(), GetEffectivePresetIndex());
+                _manualCutControl.ViewModel.BarLength = GetEffectiveBarLength();
+                _manualCutControl.ViewModel.CurrentPreset = GetEffectivePreset();
                 UpdateErrorsPanel();
             }
 
             UpdateInfoBlock();
         }
 
+        /// <summary>
+        /// Обновляет панель отображения ошибок (видимость и текст).
+        /// </summary>
         private void UpdateErrorsPanel()
         {
             if (_manualCutControl == null) return;
@@ -284,10 +370,9 @@ namespace LinearCutWpf.Controls
             var txtDetailErrors = FindName("txtDetailErrors") as TextBlock;
             if (errorsBorder == null || txtDetailErrors == null) return;
 
-            var errors = _manualCutControl.GetErrorMessages();
-            if (errors.Any())
+            if (_manualCutControl.ViewModel.HasErrorsText)
             {
-                txtDetailErrors.Text = string.Join("\n", errors);
+                txtDetailErrors.Text = _manualCutControl.ViewModel.ErrorsText;
                 errorsBorder.Visibility = Visibility.Visible;
             }
             else
@@ -311,6 +396,9 @@ namespace LinearCutWpf.Controls
             }
         }
 
+        /// <summary>
+        /// Обновляет информационный блок (кол-во деталей, общая длина, настройки).
+        /// </summary>
         private void UpdateInfoBlock()
         {
             if (infoLabel == null) return;
@@ -323,13 +411,16 @@ namespace LinearCutWpf.Controls
             var parts = new List<double>();
             double totalPartsLength = 0;
 
-            if (_gridInput != null && _vals.Any())
+            if (_articleRows != null && _vals.Any())
             {
-                foreach (DataRow row in _gridInput.Rows)
+                foreach (DataRow row in _articleRows)
                 {
                     var valObj = row[_vals.First()];
                     if (valObj == DBNull.Value || string.IsNullOrWhiteSpace(valObj?.ToString())) continue;
-                    double l = Convert.ToDouble(valObj);
+                    
+                    string valStr = valObj.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                    if (!double.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out double l) || l <= 0) continue;
+                    
                     double lWithCut = l + preset.CutWidth;
                     int c = 1;
                     if (!string.IsNullOrEmpty(_qty))
@@ -337,7 +428,8 @@ namespace LinearCutWpf.Controls
                         var qtyObj = row[_qty];
                         if (qtyObj != DBNull.Value && !string.IsNullOrWhiteSpace(qtyObj?.ToString()))
                         {
-                            if (double.TryParse(qtyObj.ToString(), out double q))
+                            string qtyStr = qtyObj.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                            if (double.TryParse(qtyStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out double q) && q > 0)
                                 c = (int)q;
                         }
                     }
@@ -359,6 +451,9 @@ namespace LinearCutWpf.Controls
             UpdateIndicators();
         }
 
+        /// <summary>
+        /// Обновляет индикаторы (цветовые метки) настроек: хлыст, пресет, ручной раскрой.
+        /// </summary>
         private void UpdateIndicators()
         {
             bool isDefaultBar = !_settings.BarLength.HasValue;

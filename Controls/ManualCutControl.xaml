@@ -4,92 +4,333 @@
              xmlns:local="clr-namespace:LinearCutWpf.Controls">
     
     <StackPanel>
-        <TextBlock Text="Ручной раскрой:" 
-                   FontWeight="Bold" 
-                   Margin="0,0,0,10"/>
+        <DockPanel Margin="0,0,0,10">
+            <TextBlock Text="Ручной раскрой:" 
+                       FontWeight="Bold" 
+                       VerticalAlignment="Center"/>
+            <Button Content="Добавить строку" 
+                    Command="{Binding AddRowCommand}"
+                    HorizontalAlignment="Right"
+                    Padding="10,2"/>
+        </DockPanel>
         
         <DataGrid x:Name="dgManualCuts"
+                  ItemsSource="{Binding ManualCuts}"
                   AutoGenerateColumns="False"
-                  CanUserAddRows="True"
+                  CanUserAddRows="False"
                   CanUserDeleteRows="True"
                   MinHeight="200"
-                  MaxHeight="250"
-                  CellEditEnding="dgManualCuts_CellEditEnding">
+                  MaxHeight="250">
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Setter Property="ContextMenu">
+                        <Setter.Value>
+                            <ContextMenu>
+                                <MenuItem Header="Удалить строку" 
+                                          Command="{Binding DataContext.DeleteRowCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" 
+                                          CommandParameter="{Binding}"/>
+                            </ContextMenu>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </DataGrid.RowStyle>
+            <DataGrid.Resources>
+                <Style TargetType="DataGridCell">
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="{x:Type DataGridCell}">
+                                <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                    <ContentPresenter VerticalAlignment="Center" Margin="2,0"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </DataGrid.Resources>
+            
             <DataGrid.Columns>
                 <!-- Хлыст -->
                 <DataGridTemplateColumn Header="Хлыст" Width="80">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=local:ManualCutControl}, Path=BarLengths}"
-                                      SelectedItem="{Binding BarLength, UpdateSourceTrigger=PropertyChanged}"
-                                      IsSynchronizedWithCurrentItem="False"/>
+                            <TextBox Text="{Binding BarLength, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" VerticalContentAlignment="Center" BorderThickness="0" Background="Transparent" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellStyle>
+                        <Style TargetType="DataGridCell">
+                            <Setter Property="Background" Value="White"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasLengthErrorBarLength}" Value="True">
+                                    <Setter Property="Background" Value="LightCoral"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGridTemplateColumn.CellStyle>
+                </DataGridTemplateColumn>
+
+                <!-- Количество -->
+                <DataGridTemplateColumn Header="Кол-во" Width="60">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBox Text="{Binding Count, UpdateSourceTrigger=PropertyChanged, TargetNullValue=1, FallbackValue=1}" VerticalContentAlignment="Center" BorderThickness="0" Background="Transparent" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellStyle>
+                        <Style TargetType="DataGridCell">
+                            <Setter Property="Background" Value="White"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasCountErrorCount}" Value="True">
+                                    <Setter Property="Background" Value="Red"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGridTemplateColumn.CellStyle>
                 </DataGridTemplateColumn>
                 
                 <!-- Размер 1 -->
                 <DataGridTemplateColumn Header="Размер 1" Width="80">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=local:ManualCutControl}, Path=AvailableSizes}"
-                                      SelectedItem="{Binding Size1, UpdateSourceTrigger=PropertyChanged}"
-                                      IsSynchronizedWithCurrentItem="False"/>
+                            <ComboBox ItemsSource="{Binding AvailableSizes1}"
+                                      SelectedValue="{Binding Size1, UpdateSourceTrigger=PropertyChanged}"
+                                      SelectedValuePath="DisplaySize"
+                                      IsSynchronizedWithCurrentItem="False"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      Tag="1">
+                                <ComboBox.ItemContainerStyle>
+                                    <Style TargetType="ComboBoxItem">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                                                <Setter Property="Background" Value="LightCoral"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding FitsInSpace}" Value="False">
+                                                <Setter Property="Background" Value="LightCoral"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ComboBox.ItemContainerStyle>
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DisplaySize}" Padding="2" Background="Transparent"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellStyle>
+                        <Style TargetType="DataGridCell">
+                            <Setter Property="Background" Value="White"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="{x:Type DataGridCell}">
+                                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                            <ContentPresenter VerticalAlignment="Center" Margin="2,0"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasLengthErrorSize1}" Value="True">
+                                    <Setter Property="Background" Value="LightCoral"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasCountErrorSize1}" Value="True">
+                                    <Setter Property="Background" Value="LightCoral"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGridTemplateColumn.CellStyle>
                 </DataGridTemplateColumn>
                 
                 <!-- Размер 2 -->
                 <DataGridTemplateColumn Header="Размер 2" Width="80">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=local:ManualCutControl}, Path=AvailableSizes}"
-                                      SelectedItem="{Binding Size2, UpdateSourceTrigger=PropertyChanged}"
-                                      IsSynchronizedWithCurrentItem="False"/>
+                            <ComboBox ItemsSource="{Binding AvailableSizes2}"
+                                      SelectedValue="{Binding Size2, UpdateSourceTrigger=PropertyChanged}"
+                                      SelectedValuePath="DisplaySize"
+                                      IsSynchronizedWithCurrentItem="False"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      Tag="2">
+                                <ComboBox.ItemContainerStyle>
+                                    <Style TargetType="ComboBoxItem">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                                                <Setter Property="Background" Value="LightCoral"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding FitsInSpace}" Value="False">
+                                                <Setter Property="Background" Value="LightCoral"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ComboBox.ItemContainerStyle>
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DisplaySize}" Padding="2" Background="Transparent"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellStyle>
+                        <Style TargetType="DataGridCell">
+                            <Setter Property="Background" Value="White"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="{x:Type DataGridCell}">
+                                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                            <ContentPresenter VerticalAlignment="Center" Margin="2,0"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasLengthErrorSize2}" Value="True">
+                                    <Setter Property="Background" Value="LightCoral"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasCountErrorSize2}" Value="True">
+                                    <Setter Property="Background" Value="LightCoral"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGridTemplateColumn.CellStyle>
                 </DataGridTemplateColumn>
                 
                 <!-- Размер 3 -->
                 <DataGridTemplateColumn Header="Размер 3" Width="80">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=local:ManualCutControl}, Path=AvailableSizes}"
-                                      SelectedItem="{Binding Size3, UpdateSourceTrigger=PropertyChanged}"
-                                      IsSynchronizedWithCurrentItem="False"/>
+                            <ComboBox ItemsSource="{Binding AvailableSizes3}"
+                                      SelectedValue="{Binding Size3, UpdateSourceTrigger=PropertyChanged}"
+                                      SelectedValuePath="DisplaySize"
+                                      IsSynchronizedWithCurrentItem="False"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      Tag="3">
+                                <ComboBox.ItemContainerStyle>
+                                    <Style TargetType="ComboBoxItem">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                                                <Setter Property="Background" Value="LightCoral"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding FitsInSpace}" Value="False">
+                                                <Setter Property="Background" Value="LightCoral"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ComboBox.ItemContainerStyle>
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DisplaySize}" Padding="2" Background="Transparent"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellStyle>
+                        <Style TargetType="DataGridCell">
+                            <Setter Property="Background" Value="White"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="{x:Type DataGridCell}">
+                                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                            <ContentPresenter VerticalAlignment="Center" Margin="2,0"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasLengthErrorSize3}" Value="True">
+                                    <Setter Property="Background" Value="LightCoral"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasCountErrorSize3}" Value="True">
+                                    <Setter Property="Background" Value="LightCoral"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGridTemplateColumn.CellStyle>
                 </DataGridTemplateColumn>
                 
                 <!-- Размер 4 -->
                 <DataGridTemplateColumn Header="Размер 4" Width="80">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=local:ManualCutControl}, Path=AvailableSizes}"
-                                      SelectedItem="{Binding Size4, UpdateSourceTrigger=PropertyChanged}"
-                                      IsSynchronizedWithCurrentItem="False"/>
+                            <ComboBox ItemsSource="{Binding AvailableSizes4}"
+                                      SelectedValue="{Binding Size4, UpdateSourceTrigger=PropertyChanged}"
+                                      SelectedValuePath="DisplaySize"
+                                      IsSynchronizedWithCurrentItem="False"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      Tag="4">
+                                <ComboBox.ItemContainerStyle>
+                                    <Style TargetType="ComboBoxItem">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                                                <Setter Property="Background" Value="LightCoral"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding FitsInSpace}" Value="False">
+                                                <Setter Property="Background" Value="LightCoral"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ComboBox.ItemContainerStyle>
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DisplaySize}" Padding="2" Background="Transparent"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellStyle>
+                        <Style TargetType="DataGridCell">
+                            <Setter Property="Background" Value="White"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="{x:Type DataGridCell}">
+                                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                            <ContentPresenter VerticalAlignment="Center" Margin="2,0"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasLengthErrorSize4}" Value="True">
+                                    <Setter Property="Background" Value="LightCoral"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasCountErrorSize4}" Value="True">
+                                    <Setter Property="Background" Value="LightCoral"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGridTemplateColumn.CellStyle>
                 </DataGridTemplateColumn>
+
+                <!-- Исп. остатки -->
+                <DataGridCheckBoxColumn Header="Исп. остатки" 
+                                        Binding="{Binding UseRemainders, UpdateSourceTrigger=PropertyChanged}"
+                                        Width="90">
+                    <DataGridCheckBoxColumn.ElementStyle>
+                        <Style TargetType="CheckBox">
+                            <Setter Property="HorizontalAlignment" Value="Center"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                        </Style>
+                    </DataGridCheckBoxColumn.ElementStyle>
+                    <DataGridCheckBoxColumn.EditingElementStyle>
+                        <Style TargetType="CheckBox">
+                            <Setter Property="HorizontalAlignment" Value="Center"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                        </Style>
+                    </DataGridCheckBoxColumn.EditingElementStyle>
+                </DataGridCheckBoxColumn>
                 
-                <!-- Количество -->
-                <DataGridTextColumn Header="Кол-во" 
-                                    Binding="{Binding Count, UpdateSourceTrigger=PropertyChanged}"
-                                    Width="60"/>
             </DataGrid.Columns>
-            
-            <DataGrid.RowStyle>
-                <Style TargetType="DataGridRow">
-                    <Setter Property="Background" Value="White"/>
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding HasLengthError}" Value="True">
-                            <Setter Property="Background" Value="Red"/>
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding HasCountError}" Value="True">
-                            <Setter Property="Background" Value="LightSalmon"/>
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </DataGrid.RowStyle>
         </DataGrid>
         
         <!-- Информация об ошибках -->
@@ -97,6 +338,17 @@
                    Foreground="Red"
                    TextWrapping="Wrap"
                    Margin="0,10,0,0"
-                   Visibility="Collapsed"/>
+                   Text="{Binding ErrorsText}">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasErrorsText}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
     </StackPanel>
 </UserControl>

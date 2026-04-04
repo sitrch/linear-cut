@@ -39,29 +39,58 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="NameCell" TargetType="DataGridCell">
+            <Setter Property="Background" Value="White"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsName}" Value="True">
+                    <Setter Property="Background" Value="LightPink"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="LeftAngleCell" TargetType="DataGridCell">
+            <Setter Property="Background" Value="White"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsLeftAngle}" Value="True">
+                    <Setter Property="Background" Value="LightSkyBlue"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="RightAngleCell" TargetType="DataGridCell">
+            <Setter Property="Background" Value="White"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsRightAngle}" Value="True">
+                    <Setter Property="Background" Value="Plum"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="450"/>
+            <ColumnDefinition Width="450" x:Name="LeftColumn"/>
+            <ColumnDefinition Width="5"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
         <!-- Левая панель настроек -->
         <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="10">
             <StackPanel>
+                <TextBlock Text="Объект:" Margin="0,0,0,5" FontWeight="Bold"/>
+                <TextBox x:Name="tbObjectName" Height="25" Margin="0,0,0,10" VerticalContentAlignment="Center"/>
+
                 <Button x:Name="btnLoad" Content="Открыть .xlsx" Height="40" Background="AliceBlue" Click="OnOpenFileClick"/>
                 <ComboBox x:Name="cbSheetSelector" Margin="0,5,0,0" Height="30" SelectionChanged="OnSheetSelected"/>
 
                 <TextBlock Text="Настройка ролей столбцов:" Margin="0,10,0,5"/>
                 <DataGrid x:Name="dgColumnConfig" Height="200" AutoGenerateColumns="False" CanUserAddRows="False"
-                          CellEditEnding="OnColumnConfigCellEditEnding"
-                          PreviewMouseLeftButtonDown="OnColumnConfigPreviewMouseLeftButtonDown"
                           Loaded="OnDgColumnConfigLoaded">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Столбец" Binding="{Binding ColName}" IsReadOnly="True" Width="*"/>
                         <DataGridCheckBoxColumn Header="Key" Binding="{Binding IsKey, UpdateSourceTrigger=PropertyChanged}" Width="50" CellStyle="{StaticResource KeyCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
+                        <DataGridCheckBoxColumn Header="Наимен." Binding="{Binding IsName, UpdateSourceTrigger=PropertyChanged}" Width="60" CellStyle="{StaticResource NameCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
                         <DataGridCheckBoxColumn Header="Value" Binding="{Binding IsVal, UpdateSourceTrigger=PropertyChanged}" Width="50" CellStyle="{StaticResource ValCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
                         <DataGridCheckBoxColumn Header="Quantity" Binding="{Binding IsQty, UpdateSourceTrigger=PropertyChanged}" Width="50" CellStyle="{StaticResource QtyCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
+                        <DataGridCheckBoxColumn Header="Лев" Binding="{Binding IsLeftAngle, UpdateSourceTrigger=PropertyChanged}" Width="50" CellStyle="{StaticResource LeftAngleCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
+                        <DataGridCheckBoxColumn Header="Прав" Binding="{Binding IsRightAngle, UpdateSourceTrigger=PropertyChanged}" Width="50" CellStyle="{StaticResource RightAngleCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
                     </DataGrid.Columns>
                 </DataGrid>
 
@@ -102,8 +131,11 @@
             </StackPanel>
         </ScrollViewer>
 
+        <!-- Разделитель -->
+        <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="LightGray" DragCompleted="GridSplitter_DragCompleted"/>
+
         <!-- Правая панель - данные -->
-        <DataGrid x:Name="dgInput" Grid.Column="1" IsReadOnly="True" Background="White"
+        <DataGrid x:Name="dgInput" Grid.Column="2" IsReadOnly="True" Background="White"
                   AutoGenerateColumns="True" LoadingRow="OnDgInputLoadingRow"
                   AutoGeneratingColumn="OnDgInputAutoGeneratingColumn"
                   Loaded="OnDgInputLoaded"/>

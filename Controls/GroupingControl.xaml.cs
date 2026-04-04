@@ -11,7 +11,11 @@ using LinearCutWpf.Models;
 
 namespace LinearCutWpf.Controls
 {
-    public partial class GroupingControl : UserControl
+    /// <summary>
+    /// Контрол, управляющий вкладками для группировки артикулов.
+    /// Создает и отображает вложенные ArticleGroupingControl для каждого артикула.
+    /// </summary>
+    public partial class GroupingControl : UserControl, INotifyPropertyChanged
     {
         private TabControl _groupingTabControl;
         private Dictionary<string, ArticleSettings> _articleSettings;
@@ -23,19 +27,55 @@ namespace LinearCutWpf.Controls
         private List<PresetModel> _presets;
         private DataTable _gridInput;
         private Func<string, List<string>> _getCheckedCols;
+        private HashSet<int> _invalidRows;
 
-        public event EventHandler<Dictionary<string, ArticleSettings>> SettingsApplied;
+        /// <summary>
+        /// Событие, вызываемое при изменении свойства (реализация INotifyPropertyChanged).
+        /// </summary>
+        public event PropertyChangedEventHandler PropertyChanged;
 
+        /// <summary>
+        /// Возвращает элемент управления вкладками для группировки.
+        /// </summary>
         public TabControl GroupingTabControl => _groupingTabControl;
+
+        /// <summary>
+        /// Возвращает словарь настроек для каждого артикула.
+        /// </summary>
         public Dictionary<string, ArticleSettings> ArticleSettings => _articleSettings;
 
+        private GridLength _leftPanelWidth;
+
+        /// <summary>
+        /// Получает или задает ширину левой панели.
+        /// При изменении сохраняет значение в настройки.
+        /// </summary>
+        public GridLength LeftPanelWidth
+        {
+            get => _leftPanelWidth;
+            set
+            {
+                if (_leftPanelWidth != value)
+                {
+                    _leftPanelWidth = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LeftPanelWidth)));
+                    Services.CutSettingsProvider.SaveLeftPanelWidth(value.Value);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Инициализирует новый экземпляр класса <see cref="GroupingControl"/>.
+        /// </summary>
         public GroupingControl()
         {
             InitializeComponent();
+            _leftPanelWidth = new GridLength(Services.CutSettingsProvider.LoadLeftPanelWidth());
             _groupingTabControl = (TabControl)FindName("groupingTabControl");
             _articleSettings = new Dictionary<string, ArticleSettings>();
             _groupingTabControl.SelectionChanged += OnGroupingTabSelecting;
             UpdateHintVisibility();
+            DataContext = this;
         }
 
         private void UpdateHintVisibility()
@@ -45,9 +85,34 @@ namespace LinearCutWpf.Controls
                 hint.Visibility = _groupingTabControl.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        /// <summary>
+        /// Событие, вызываемое после применения новых настроек.
+        /// </summary>
+        public event EventHandler<Dictionary<string, ArticleSettings>> SettingsApplied;
+
+        /// <summary>
+        /// Применяет новые настройки артикулов и вызывает событие <see cref="SettingsApplied"/>.
+        /// </summary>
+        /// <param name="newSettings">Словарь новых настроек артикулов.</param>
+        public void ApplySettingsAndNotify(Dictionary<string, ArticleSettings> newSettings)
+        {
+            _articleSettings = newSettings;
+            SettingsApplied?.Invoke(this, _articleSettings);
+        }
+
+        /// <summary>
+        /// Инициализирует контрол общими данными для раскроя.
+        /// </summary>
+        /// <param name="defaultBarLength">Длина хлыста по умолчанию.</param>
+        /// <param name="defaultPreset">Пресет настроек оборудования по умолчанию.</param>
+        /// <param name="stockLengths">Коллекция доступных длин хлыстов (складских остатков).</param>
+        /// <param name="presets">Список доступных пресетов оборудования.</param>
+        /// <param name="gridInput">Входная таблица данных.</param>
+        /// <param name="getCheckedCols">Функция для получения выбранных колонок по их роли (IsKey, IsVal, IsQty).</param>
+        /// <param name="invalidRows">Набор индексов строк с ошибками валидации.</param>
         public void Initialize(double defaultBarLength, PresetModel defaultPreset,
             ObservableCollection<StockLengthModel> stockLengths, List<PresetModel> presets,
-            DataTable gridInput, Func<string, List<string>> getCheckedCols)
+            DataTable gridInput, Func<string, List<string>> getCheckedCols, HashSet<int> invalidRows = null)
         {
             _defaultBarLength = defaultBarLength;
             _defaultPreset = defaultPreset;
@@ -55,8 +120,14 @@ namespace LinearCutWpf.Controls
             _presets = presets;
             _gridInput = gridInput;
             _getCheckedCols = getCheckedCols;
+            _invalidRows = invalidRows ?? new HashSet<int>();
         }
 
+        /// <summary>
+        /// Получает существующие настройки для артикула или создает новые, если их нет.
+        /// </summary>
+        /// <param name="articleName">Имя артикула.</param>
+        /// <returns>Объект настроек для указанного артикула.</returns>
         public ArticleSettings GetOrCreateArticleSettings(string articleName)
         {
             if (!_articleSettings.ContainsKey(articleName))
@@ -64,6 +135,12 @@ namespace LinearCutWpf.Controls
             return _articleSettings[articleName];
         }
 
+        /// <summary>
+        /// Возвращает пресет оборудования, который должен применяться для данного артикула 
+        /// (индивидуальный или по умолчанию).
+        /// </summary>
+        /// <param name="articleName">Имя артикула.</param>
+        /// <returns>Пресет оборудования.</returns>
         public PresetModel GetEffectivePreset(string articleName)
         {
             if (_articleSettings.TryGetValue(articleName, out var settings) && settings.Preset != null)
@@ -71,6 +148,12 @@ namespace LinearCutWpf.Controls
             return _defaultPreset;
         }
 
+        /// <summary>
+        /// Возвращает длину хлыста, которая должна применяться для данного артикула 
+        /// (индивидуальная или по умолчанию).
+        /// </summary>
+        /// <param name="articleName">Имя артикула.</param>
+        /// <returns>Длина хлыста.</returns>
         public double GetEffectiveBarLength(string articleName)
         {
             if (_articleSettings.TryGetValue(articleName, out var settings) && settings.BarLength.HasValue)
@@ -78,6 +161,11 @@ namespace LinearCutWpf.Controls
             return _defaultBarLength;
         }
 
+        /// <summary>
+        /// Возвращает индекс пресета в списке пресетов (сдвиг +1, т.к. 0 - это "По умолчанию").
+        /// </summary>
+        /// <param name="articleName">Имя артикула.</param>
+        /// <returns>Индекс пресета в ComboBox.</returns>
         public int GetEffectivePresetIndex(string articleName)
         {
             if (_presets == null) return 0;
@@ -90,12 +178,21 @@ namespace LinearCutWpf.Controls
             return 0;
         }
 
+        /// <summary>
+        /// Устанавливает значения длины хлыста и пресета по умолчанию.
+        /// </summary>
+        /// <param name="barLength">Длина хлыста.</param>
+        /// <param name="preset">Пресет оборудования.</param>
         public void SetDefaults(double barLength, PresetModel preset)
         {
             _defaultBarLength = barLength;
             _defaultPreset = preset;
         }
 
+        /// <summary>
+        /// Проверяет, есть ли ошибки валидации в ручном раскрое хотя бы на одной из вкладок артикулов.
+        /// </summary>
+        /// <returns>True, если есть ошибки, иначе False.</returns>
         public bool HasAnyManualErrors()
         {
             foreach (var kvp in _articleGroupingControls)
@@ -105,6 +202,11 @@ namespace LinearCutWpf.Controls
             return false;
         }
 
+        /// <summary>
+        /// Проверяет, есть ли ошибки валидации в ручном раскрое для конкретного артикула.
+        /// </summary>
+        /// <param name="articleName">Имя артикула.</param>
+        /// <returns>True, если есть ошибки, иначе False.</returns>
         public bool HasManualErrorsForArticle(string articleName)
         {
             if (_articleGroupingControls.TryGetValue(articleName, out var ctrl))
@@ -112,6 +214,9 @@ namespace LinearCutWpf.Controls
             return false;
         }
 
+        /// <summary>
+        /// Выполняет группировку входных данных по артикулам и создает вкладки для каждого артикула.
+        /// </summary>
         public void RunGroupingWithTabs()
         {
             if (_gridInput == null) return;
@@ -130,7 +235,42 @@ namespace LinearCutWpf.Controls
                 return;
             }
 
-            var groups = _gridInput.Rows.Cast<DataRow>().GroupBy(r => string.Join("_", keys.Select(k => r[k]?.ToString())));
+            var groups = _gridInput.Rows.Cast<DataRow>()
+                .Where(r => !_invalidRows.Contains(_gridInput.Rows.IndexOf(r)))
+                .GroupBy(r => 
+                {
+                    bool isError = false;
+                    
+                    if (vals.Any())
+                    {
+                        var valObj = r[vals.First()];
+                        if (valObj == DBNull.Value || string.IsNullOrWhiteSpace(valObj?.ToString()))
+                        {
+                            isError = true;
+                        }
+                        else
+                        {
+                            string valStr = valObj.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                            if (!double.TryParse(valStr, out double l) || l <= 0)
+                                isError = true;
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(qty))
+                    {
+                        var qtyObj = r[qty];
+                        if (qtyObj != DBNull.Value && !string.IsNullOrWhiteSpace(qtyObj?.ToString()))
+                        {
+                            string qtyStr = qtyObj.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                            if (!double.TryParse(qtyStr, out double q) || q <= 0)
+                                isError = true;
+                        }
+                    }
+
+                    if (isError) return "Ошибки данных";
+
+                    return DataHelper.GetArticleName(keys.Select(k => r[k]?.ToString()));
+                });
 
             foreach (var g in groups)
             {
@@ -146,6 +286,15 @@ namespace LinearCutWpf.Controls
                 DataRow[] articleRows = g.ToArray();
 
                 ArticleGroupingControl articleCtrl = new ArticleGroupingControl();
+                
+                // Привязка ширины левой панели
+                System.Windows.Data.Binding binding = new System.Windows.Data.Binding(nameof(LeftPanelWidth))
+                {
+                    Source = this,
+                    Mode = System.Windows.Data.BindingMode.TwoWay
+                };
+                articleCtrl.SetBinding(ArticleGroupingControl.LeftPanelWidthProperty, binding);
+
                 articleCtrl.Initialize(articleName, settings,
                     _defaultBarLength, _defaultPreset,
                     _stockLengths, _presets,
@@ -162,31 +311,44 @@ namespace LinearCutWpf.Controls
                 _articleGroupingControls[articleName] = articleCtrl;
             }
 
+            if (_groupingTabControl.Items.Count > 0)
+            {
+                _groupingTabControl.SelectedIndex = 0;
+                RecolorAllTabs();
+            }
+
             UpdateHintVisibility();
         }
 
         private void ColorTab(string articleName)
         {
+            RecolorAllTabs();
+        }
+
+        private void RecolorAllTabs()
+        {
+            var selectedTab = _groupingTabControl.SelectedItem as TabItem;
+
             foreach (var kvp in _tabToArticle)
             {
-                if (kvp.Value == articleName)
+                var tabItem = kvp.Key;
+                var articleName = kvp.Value;
+                var settings = GetOrCreateArticleSettings(articleName);
+                var hasCustom = settings.HasCustomSettings(_defaultBarLength, _defaultPreset);
+                bool isSelected = tabItem == selectedTab;
+
+                if (isSelected)
                 {
-                    var tabItem = kvp.Key;
-                    var settings = GetOrCreateArticleSettings(articleName);
-                    var hasCustom = settings.HasCustomSettings(_defaultBarLength, _defaultPreset);
-                    
-                    if (hasCustom)
-                    {
-                        tabItem.Background = Brushes.MistyRose;
-                        tabItem.Foreground = Brushes.DarkRed;
-                    }
-                    else
-                    {
-                        tabItem.Background = Brushes.White;
-                        tabItem.Foreground = SystemColors.ControlTextBrush;
-                    }
-                    tabItem.UpdateLayout();
+                    tabItem.Background = hasCustom ? Brushes.LightCoral : Brushes.LightBlue;
+                    tabItem.Foreground = hasCustom ? Brushes.White : SystemColors.ControlTextBrush;
                 }
+                else
+                {
+                    tabItem.Background = hasCustom ? Brushes.MistyRose : Brushes.White;
+                    tabItem.Foreground = hasCustom ? Brushes.DarkRed : SystemColors.ControlTextBrush;
+                }
+                
+                tabItem.UpdateLayout();
             }
         }
 
@@ -194,16 +356,26 @@ namespace LinearCutWpf.Controls
         {
             if (_groupingTabControl.SelectedItem == null || _tabToArticle.Count == 0) return;
 
-            if (_tabToArticle.TryGetValue((TabItem)_groupingTabControl.SelectedItem, out string currentArticle))
+            // Проверяем ошибки на вкладке, С КОТОРОЙ мы уходим (если такая есть)
+            if (e.RemovedItems.Count > 0 && e.RemovedItems[0] is TabItem oldTab)
             {
-                if (HasManualErrorsForArticle(currentArticle))
+                if (_tabToArticle.TryGetValue(oldTab, out string oldArticle))
                 {
-                    // Отмена переключения
-                    MessageBox.Show("Есть ошибки в ручном раскрое!\r\nДетали не помещаются в хлыст.\r\nИсправьте красные ячейки.",
-                        "Ошибка валидации", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    e.Handled = true;
+                    if (HasManualErrorsForArticle(oldArticle))
+                    {
+                        MessageBox.Show("Есть ошибки в ручном раскрое на текущей вкладке!\r\nДетали не помещаются в хлыст.\r\nИсправьте красные ячейки перед переключением.",
+                            "Ошибка валидации", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        
+                        // Возвращаем выделение обратно на старую вкладку
+                        _groupingTabControl.SelectedItem = oldTab;
+                        e.Handled = true;
+                        return;
+                    }
                 }
             }
+
+            // Перекрашиваем вкладки (выделяем новую активную)
+            RecolorAllTabs();
         }
     }
 }

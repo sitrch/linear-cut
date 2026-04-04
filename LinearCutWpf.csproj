@@ -9,5 +9,11 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.102.3" />
+    <PackageReference Include="QuestPDF" Version="2026.2.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="LinearCutWpf.Tests\**" />
+    <Page Remove="LinearCutWpf.Tests\**" />
+    <None Remove="LinearCutWpf.Tests\**" />
   </ItemGroup>
 </Project>

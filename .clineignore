@@ -1,0 +1,41 @@
+# Сгенерированные файлы и кэш .NET
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.userosscache
+*.sln.doccache
+*.suo
+
+# Зависимости и пакеты
+node_modules/
+packages/
+.nuget/
+
+# Файлы сборки и публикации
+publish/
+*.nupkg
+
+# Логи и временные файлы
+*.log
+*.tmp
+tmp/
+temp/
+
+# Файлы самой системы Cline/MCP (чтобы не зацикливался)
+.clinedata/
+memory.json
+*.mcp_cache
+
+# Изображения и тяжелые ассеты (ИИ они не нужны)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.pdf
+*.zip
+*.7z
+

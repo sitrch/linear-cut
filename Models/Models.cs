@@ -4,6 +4,9 @@ using System.Linq;
 
 namespace LinearCutWpf.Models
 {
+    /// <summary>
+    /// Глобальные настройки раскроя.
+    /// </summary>
     public class CutSettings
     {
         public double TrimStart { get; set; }
@@ -12,6 +15,9 @@ namespace LinearCutWpf.Models
         public Dictionary<string, List<double>> ItemStocks { get; set; } = new Dictionary<string, List<double>>();
     }
 
+    /// <summary>
+    /// Модель пресета (набора параметров обрезки и толщины реза).
+    /// </summary>
     public class PresetModel
     {
         public string Name { get; set; }
@@ -20,6 +26,9 @@ namespace LinearCutWpf.Models
         public double CutWidth { get; set; }
     }
 
+    /// <summary>
+    /// Модель результата распила одного хлыста.
+    /// </summary>
     public class CutBar
     {
         public double StockLength { get; set; }
@@ -27,15 +36,26 @@ namespace LinearCutWpf.Models
         public double Remainder { get; set; }
     }
 
+    /// <summary>
+    /// Модель доступной длины хлыста (с флагом включения).
+    /// </summary>
     public class StockLengthModel
     {
         public double Length { get; set; }
         public bool IsEnabled { get; set; } = true;
     }
 
+    /// <summary>
+    /// Строка ручного ввода деталей для определенного хлыста.
+    /// Поддерживает валидацию и расчет доступного места.
+    /// </summary>
     public class ManualCutRow : INotifyPropertyChanged
     {
         private double? _barLength;
+        private System.Collections.ObjectModel.ObservableCollection<PartSizeAvailability> _availableSizes1 = new System.Collections.ObjectModel.ObservableCollection<PartSizeAvailability>();
+        private System.Collections.ObjectModel.ObservableCollection<PartSizeAvailability> _availableSizes2 = new System.Collections.ObjectModel.ObservableCollection<PartSizeAvailability>();
+        private System.Collections.ObjectModel.ObservableCollection<PartSizeAvailability> _availableSizes3 = new System.Collections.ObjectModel.ObservableCollection<PartSizeAvailability>();
+        private System.Collections.ObjectModel.ObservableCollection<PartSizeAvailability> _availableSizes4 = new System.Collections.ObjectModel.ObservableCollection<PartSizeAvailability>();
         private string _size1;
         private string _size2;
         private string _size3;
@@ -43,6 +63,22 @@ namespace LinearCutWpf.Models
         private int _count = 1;
         private bool _hasLengthError;
         private bool _hasCountError;
+        private bool _hasLengthErrorBarLength;
+        private bool _hasCountErrorCount;
+        private bool _hasLengthErrorSize1;
+        private bool _hasLengthErrorSize2;
+        private bool _hasLengthErrorSize3;
+        private bool _hasLengthErrorSize4;
+        private bool _hasCountErrorSize1;
+        private bool _hasCountErrorSize2;
+        private bool _hasCountErrorSize3;
+        private bool _hasCountErrorSize4;
+        private bool _useRemainders = true;
+        
+        private double _availableSpaceForSize1 = double.MaxValue;
+        private double _availableSpaceForSize2 = double.MaxValue;
+        private double _availableSpaceForSize3 = double.MaxValue;
+        private double _availableSpaceForSize4 = double.MaxValue;
 
         public double? BarLength
         {
@@ -80,6 +116,12 @@ namespace LinearCutWpf.Models
             set { _count = value; OnPropertyChanged(nameof(Count)); }
         }
 
+        public bool UseRemainders
+        {
+            get => _useRemainders;
+            set { _useRemainders = value; OnPropertyChanged(nameof(UseRemainders)); }
+        }
+
         public bool HasLengthError
         {
             get => _hasLengthError;
@@ -92,6 +134,114 @@ namespace LinearCutWpf.Models
             set { _hasCountError = value; OnPropertyChanged(nameof(HasCountError)); }
         }
 
+        public bool HasLengthErrorBarLength
+        {
+            get => _hasLengthErrorBarLength;
+            set { _hasLengthErrorBarLength = value; OnPropertyChanged(nameof(HasLengthErrorBarLength)); }
+        }
+
+        public bool HasCountErrorCount
+        {
+            get => _hasCountErrorCount;
+            set { _hasCountErrorCount = value; OnPropertyChanged(nameof(HasCountErrorCount)); }
+        }
+
+        public bool HasLengthErrorSize1
+        {
+            get => _hasLengthErrorSize1;
+            set { _hasLengthErrorSize1 = value; OnPropertyChanged(nameof(HasLengthErrorSize1)); }
+        }
+
+        public bool HasLengthErrorSize2
+        {
+            get => _hasLengthErrorSize2;
+            set { _hasLengthErrorSize2 = value; OnPropertyChanged(nameof(HasLengthErrorSize2)); }
+        }
+
+        public bool HasLengthErrorSize3
+        {
+            get => _hasLengthErrorSize3;
+            set { _hasLengthErrorSize3 = value; OnPropertyChanged(nameof(HasLengthErrorSize3)); }
+        }
+
+        public bool HasLengthErrorSize4
+        {
+            get => _hasLengthErrorSize4;
+            set { _hasLengthErrorSize4 = value; OnPropertyChanged(nameof(HasLengthErrorSize4)); }
+        }
+
+        public bool HasCountErrorSize1
+        {
+            get => _hasCountErrorSize1;
+            set { _hasCountErrorSize1 = value; OnPropertyChanged(nameof(HasCountErrorSize1)); }
+        }
+
+        public bool HasCountErrorSize2
+        {
+            get => _hasCountErrorSize2;
+            set { _hasCountErrorSize2 = value; OnPropertyChanged(nameof(HasCountErrorSize2)); }
+        }
+
+        public bool HasCountErrorSize3
+        {
+            get => _hasCountErrorSize3;
+            set { _hasCountErrorSize3 = value; OnPropertyChanged(nameof(HasCountErrorSize3)); }
+        }
+
+        public bool HasCountErrorSize4
+        {
+            get => _hasCountErrorSize4;
+            set { _hasCountErrorSize4 = value; OnPropertyChanged(nameof(HasCountErrorSize4)); }
+        }
+
+        public double AvailableSpaceForSize1
+        {
+            get => _availableSpaceForSize1;
+            set { _availableSpaceForSize1 = value; OnPropertyChanged(nameof(AvailableSpaceForSize1)); }
+        }
+
+        public double AvailableSpaceForSize2
+        {
+            get => _availableSpaceForSize2;
+            set { _availableSpaceForSize2 = value; OnPropertyChanged(nameof(AvailableSpaceForSize2)); }
+        }
+
+        public double AvailableSpaceForSize3
+        {
+            get => _availableSpaceForSize3;
+            set { _availableSpaceForSize3 = value; OnPropertyChanged(nameof(AvailableSpaceForSize3)); }
+        }
+
+        public double AvailableSpaceForSize4
+        {
+            get => _availableSpaceForSize4;
+            set { _availableSpaceForSize4 = value; OnPropertyChanged(nameof(AvailableSpaceForSize4)); }
+        }
+
+        public System.Collections.ObjectModel.ObservableCollection<PartSizeAvailability> AvailableSizes1
+        {
+            get => _availableSizes1;
+            set { _availableSizes1 = value; OnPropertyChanged(nameof(AvailableSizes1)); }
+        }
+
+        public System.Collections.ObjectModel.ObservableCollection<PartSizeAvailability> AvailableSizes2
+        {
+            get => _availableSizes2;
+            set { _availableSizes2 = value; OnPropertyChanged(nameof(AvailableSizes2)); }
+        }
+
+        public System.Collections.ObjectModel.ObservableCollection<PartSizeAvailability> AvailableSizes3
+        {
+            get => _availableSizes3;
+            set { _availableSizes3 = value; OnPropertyChanged(nameof(AvailableSizes3)); }
+        }
+
+        public System.Collections.ObjectModel.ObservableCollection<PartSizeAvailability> AvailableSizes4
+        {
+            get => _availableSizes4;
+            set { _availableSizes4 = value; OnPropertyChanged(nameof(AvailableSizes4)); }
+        }
+
         public event PropertyChangedEventHandler PropertyChanged;
 
         protected virtual void OnPropertyChanged(string propertyName)
@@ -100,9 +250,14 @@ namespace LinearCutWpf.Models
         }
     }
 
+    /// <summary>
+    /// Индивидуальные настройки для конкретного артикула (переопределение глобальных настроек).
+    /// </summary>
     public class ArticleSettings
     {
         public string ArticleName { get; set; }
+        public string ArticleDescription { get; set; }
+        public double? VisibleHeight { get; set; }
         public double? BarLength { get; set; }
         public PresetModel Preset { get; set; }
         public System.Collections.ObjectModel.ObservableCollection<ManualCutRow> ManualCuts { get; set; } = new System.Collections.ObjectModel.ObservableCollection<ManualCutRow>();
@@ -124,20 +279,97 @@ namespace LinearCutWpf.Models
     }
 
     /// <summary>
+    /// Доступность размера детали для автодополнения и валидации в ручном раскрое.
+    /// </summary>
+    public class PartSizeAvailability : INotifyPropertyChanged
+    {
+        private string _displaySize;
+        private bool _isAvailable;
+        private bool _fitsInSpace = true;
+
+        public string DisplaySize
+        {
+            get => _displaySize;
+            set { _displaySize = value; OnPropertyChanged(nameof(DisplaySize)); }
+        }
+
+        public bool IsAvailable
+        {
+            get => _isAvailable;
+            set { _isAvailable = value; OnPropertyChanged(nameof(IsAvailable)); }
+        }
+
+        public bool FitsInSpace
+        {
+            get => _fitsInSpace;
+            set { _fitsInSpace = value; OnPropertyChanged(nameof(FitsInSpace)); }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+
+    /// <summary>
     /// Модель строки для группировки по артикулам
+    /// </summary>
+    public static class DataHelper
+    {
+        public static string GetArticleName(IEnumerable<string> keys)
+        {
+            return string.Join(" | ", keys);
+        }
+    }
+
+    /// <summary>
+    /// Модель детали для детализированного вывода результатов.
+    /// </summary>
+    public class PartItem
+    {
+        public string Article { get; set; }
+        public double Length { get; set; }
+        public int Count { get; set; }
+        public int OriginalRowIndex { get; set; } = -1;
+    }
+
+    /// <summary>
+    /// Детализированная модель распила хлыста (с разбивкой на отдельные детали).
+    /// </summary>
+    public class CutBarDetailed
+    {
+        public double StockLength { get; set; }
+        public double Remainder { get; set; }
+        public List<PartItem> Parts { get; set; } = new List<PartItem>();
+    }
+
+    /// <summary>
+    /// Строка группировки деталей по артикулу для отображения в UI и задания индивидуальных настроек.
     /// </summary>
     public class ArticleGroupingRow : INotifyPropertyChanged
     {
         private string _articleName;
+        private string _articleDescription;
         private int _totalCount;
         private double _totalLength;
         private double? _selectedBarLength;
         private PresetModel _selectedPreset;
+        private double? _selectedVisibleHeight;
+        private bool _isDefaultValue;
+        private bool _isManuallyChanged;
 
         public string ArticleName
         {
             get => _articleName;
             set { _articleName = value; OnPropertyChanged(nameof(ArticleName)); }
+        }
+
+        public string ArticleDescription
+        {
+            get => _articleDescription;
+            set { _articleDescription = value; OnPropertyChanged(nameof(ArticleDescription)); }
         }
 
         public int TotalCount
@@ -162,6 +394,24 @@ namespace LinearCutWpf.Models
         {
             get => _selectedPreset;
             set { _selectedPreset = value; OnPropertyChanged(nameof(SelectedPreset)); }
+        }
+
+        public double? SelectedVisibleHeight
+        {
+            get => _selectedVisibleHeight;
+            set { _selectedVisibleHeight = value; OnPropertyChanged(nameof(SelectedVisibleHeight)); }
+        }
+
+        public bool IsDefaultValue
+        {
+            get => _isDefaultValue;
+            set { _isDefaultValue = value; OnPropertyChanged(nameof(IsDefaultValue)); }
+        }
+
+        public bool IsManuallyChanged
+        {
+            get => _isManuallyChanged;
+            set { _isManuallyChanged = value; OnPropertyChanged(nameof(IsManuallyChanged)); }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
