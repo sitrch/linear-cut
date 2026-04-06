@@ -170,7 +170,7 @@ namespace LinearCutWpf.Controls
                     if (double.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out double l) && l > 0)
                     {
                         itemSizes.Add(l.ToString());
-                        int c = 1;
+                        int c = 0;
                         if (!string.IsNullOrEmpty(_qty))
                         {
                             var qtyObj = row[_qty];
@@ -422,7 +422,7 @@ namespace LinearCutWpf.Controls
                     if (!double.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out double l) || l <= 0) continue;
                     
                     double lWithCut = l + preset.CutWidth;
-                    int c = 1;
+                    int c = 0;
                     if (!string.IsNullOrEmpty(_qty))
                     {
                         var qtyObj = row[_qty];

@@ -216,7 +216,7 @@ namespace LinearCutWpf.Controls
 
                 foreach (var row in group)
                 {
-                    int qty = 1;
+                    int qty = 0;
                     if (qtyCol != null && row[qtyCol] != DBNull.Value && int.TryParse(row[qtyCol].ToString(), out int parsedQty))
                     {
                         qty = parsedQty;

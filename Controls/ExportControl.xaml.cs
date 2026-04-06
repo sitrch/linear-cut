@@ -889,7 +889,7 @@ namespace LinearCutWpf.Controls
                     var rowKey = DataHelper.GetArticleName(keyColumns.Select(k => row[k]?.ToString()));
                     if (rowKey == bar.Parts.FirstOrDefault()?.Article)
                     {
-                        int qty = 1;
+                        int qty = 0;
                         if (!string.IsNullOrEmpty(_qtyColumnName) && row[_qtyColumnName] != DBNull.Value)
                         {
                             if (int.TryParse(row[_qtyColumnName].ToString(), out int q)) qty = q;
