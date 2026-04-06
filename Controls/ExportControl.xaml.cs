@@ -1027,10 +1027,11 @@ namespace LinearCutWpf.Controls
                     svg.AppendLine($"<text x=\"{textX.ToString(culture)}\" y=\"{textY.ToString(culture)}\" font-family=\"GOST Type B, GOST Type A, ISOCPEUR, GOST Common, Arial\" font-style=\"italic\" font-size=\"10\" fill=\"black\" text-anchor=\"middle\">{text}</text>");
                 }
                 
-                currentX += partWidth;
-                
-                // Имитация реза (пропил) - просто белое пространство
-                currentX += sawKerf; 
+                // Рассчитываем позицию для следующей детали с учетом углов запила
+                // Деталь занимает пространство от (currentX) до (currentX + partWidth + rightOffset)
+                // Следующая деталь должна начинаться с учетом своего левого смещения
+                // Поэтому добавляем: ширину детали + пропил + правое смещение текущей детали
+                currentX += partWidth + sawKerf + rightOffset;
             }
 
             // Остаток
