@@ -114,6 +114,13 @@ namespace LinearCutWpf.Controls
             var ofd = new OpenFileDialog { Filter = "Excel|*.xlsx" };
             if (ofd.ShowDialog() == true)
             {
+                // Проверяем, не занят ли файл другим приложением
+                if (IsFileLocked(ofd.FileName))
+                {
+                    MessageBox.Show($"Файл \"{ofd.FileName}\" занят другим приложением.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
                 _currentFilePath = ofd.FileName;
                 _isLoading = true;
                 cbSheetSelector.Items.Clear();
@@ -131,6 +138,26 @@ namespace LinearCutWpf.Controls
                 _isLoading = false;
                 if (cbSheetSelector.Items.Count > 0)
                     cbSheetSelector.SelectedIndex = 0;
+            }
+        }
+
+        /// <summary>
+        /// Проверяет, заблокирован ли файл другим процессом.
+        /// </summary>
+        /// <param name="filePath">Путь к файлу для проверки.</param>
+        /// <returns>True, если файл занят; иначе False.</returns>
+        private bool IsFileLocked(string filePath)
+        {
+            try
+            {
+                using (var stream = System.IO.File.Open(filePath, System.IO.FileMode.Open, System.IO.FileAccess.ReadWrite, System.IO.FileShare.None))
+                {
+                    return false;
+                }
+            }
+            catch (System.IO.IOException)
+            {
+                return true;
             }
         }
 
