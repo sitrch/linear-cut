@@ -3,74 +3,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:LinearCutWpf.Controls"
              xmlns:converters="clr-namespace:LinearCutWpf.Converters"
+             xmlns:controls="clr-namespace:LinearCutWpf.Controls"
              Background="White">
     <UserControl.Resources>
         <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
-        <Style x:Key="CheckBoxStyle" TargetType="CheckBox">
-            <Setter Property="Background" Value="Transparent"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=IsSelected}" Value="True">
-                    <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="Black"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-        <Style x:Key="KeyCell" TargetType="DataGridCell">
-            <Setter Property="Background" Value="White"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsKey}" Value="True">
-                    <Setter Property="Background" Value="LightGreen"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-        <Style x:Key="ValCell" TargetType="DataGridCell">
-            <Setter Property="Background" Value="White"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsVal}" Value="True">
-                    <Setter Property="Background" Value="LightYellow"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-        <Style x:Key="QtyCell" TargetType="DataGridCell">
-            <Setter Property="Background" Value="White"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsQty}" Value="True">
-                    <Setter Property="Background" Value="LightCyan"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-        <Style x:Key="NameCell" TargetType="DataGridCell">
-            <Setter Property="Background" Value="White"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsName}" Value="True">
-                    <Setter Property="Background" Value="LightPink"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-        <Style x:Key="LeftAngleCell" TargetType="DataGridCell">
-            <Setter Property="Background" Value="White"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsLeftAngle}" Value="True">
-                    <Setter Property="Background" Value="LightSkyBlue"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-        <Style x:Key="RightAngleCell" TargetType="DataGridCell">
-            <Setter Property="Background" Value="White"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsRightAngle}" Value="True">
-                    <Setter Property="Background" Value="Plum"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-        <Style x:Key="ColorCell" TargetType="DataGridCell">
-            <Setter Property="Background" Value="White"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsColor}" Value="True">
-                    <Setter Property="Background" Value="LightSalmon"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
     </UserControl.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -87,21 +23,6 @@
 
                 <Button x:Name="btnLoad" Content="Открыть .xlsx" Height="40" Background="AliceBlue" Click="OnOpenFileClick"/>
                 <ComboBox x:Name="cbSheetSelector" Margin="0,5,0,0" Height="30" SelectionChanged="OnSheetSelected"/>
-
-                <TextBlock Text="Настройка ролей столбцов:" Margin="0,10,0,5"/>
-                <DataGrid x:Name="dgColumnConfig" Height="200" AutoGenerateColumns="False" CanUserAddRows="False"
-                          Loaded="OnDgColumnConfigLoaded">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Столбец" Binding="{Binding ColName}" IsReadOnly="True" Width="*"/>
-                        <DataGridCheckBoxColumn Header="Key" Binding="{Binding IsKey, UpdateSourceTrigger=PropertyChanged}" Width="40" CellStyle="{StaticResource KeyCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
-                        <DataGridCheckBoxColumn Header="Наимен." Binding="{Binding IsName, UpdateSourceTrigger=PropertyChanged}" Width="50" CellStyle="{StaticResource NameCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
-                        <DataGridCheckBoxColumn Header="Value" Binding="{Binding IsVal, UpdateSourceTrigger=PropertyChanged}" Width="40" CellStyle="{StaticResource ValCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
-                        <DataGridCheckBoxColumn Header="Quantity" Binding="{Binding IsQty, UpdateSourceTrigger=PropertyChanged}" Width="40" CellStyle="{StaticResource QtyCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
-                        <DataGridCheckBoxColumn Header="Лев" Binding="{Binding IsLeftAngle, UpdateSourceTrigger=PropertyChanged}" Width="40" CellStyle="{StaticResource LeftAngleCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
-                        <DataGridCheckBoxColumn Header="Прав" Binding="{Binding IsRightAngle, UpdateSourceTrigger=PropertyChanged}" Width="40" CellStyle="{StaticResource RightAngleCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
-                        <DataGridCheckBoxColumn Header="Цвет" Binding="{Binding IsColor, UpdateSourceTrigger=PropertyChanged}" Width="45" CellStyle="{StaticResource ColorCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
-                    </DataGrid.Columns>
-                </DataGrid>
 
                 <TextBlock Text="Пресеты:" Margin="0,10,0,5"/>
                 <DataGrid x:Name="dgPresets" Height="150" AutoGenerateColumns="False" CanUserAddRows="False"
@@ -147,6 +68,26 @@
         <DataGrid x:Name="dgInput" Grid.Column="2" IsReadOnly="True" Background="White"
                   AutoGenerateColumns="True" LoadingRow="OnDgInputLoadingRow"
                   AutoGeneratingColumn="OnDgInputAutoGeneratingColumn"
-                  Loaded="OnDgInputLoaded"/>
+                  Loaded="OnDgInputLoaded"
+                  GridLinesVisibility="All"
+                  HorizontalGridLinesBrush="#FFD0D0D0"
+                  VerticalGridLinesBrush="#FFD0D0D0">
+            <DataGrid.Resources>
+                <Style TargetType="DataGridColumnHeader">
+                    <Setter Property="FontWeight" Value="Bold"/>
+                    <Setter Property="FontStyle" Value="Italic"/>
+                    <Setter Property="Background" Value="#FFF0F0F0"/>
+                    <Setter Property="BorderBrush" Value="#FFD0D0D0"/>
+                    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                    <Setter Property="Padding" Value="4,2"/>
+                </Style>
+                <Style TargetType="DataGridCell">
+                    <Setter Property="Background" Value="White"/>
+                    <Setter Property="BorderBrush" Value="#FFD0D0D0"/>
+                    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                    <Setter Property="FontWeight" Value="Normal"/>
+                </Style>
+            </DataGrid.Resources>
+        </DataGrid>
     </Grid>
 </UserControl>

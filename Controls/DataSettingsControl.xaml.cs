@@ -25,6 +25,7 @@ namespace LinearCutWpf.Controls
         private HashSet<int> _invalidRows = new HashSet<int>();
         private bool _isLoading = false;
         private DataStoreService _dataStore => DataStoreService.Instance;
+        private readonly Dictionary<string, ColumnRoleSelector> _columnRoleSelectors = new Dictionary<string, ColumnRoleSelector>();
 
         private double _defaultBarLength = 6000;
         private PresetModel _defaultPreset = null;
@@ -77,6 +78,9 @@ namespace LinearCutWpf.Controls
                 if (_dataStore.ProcessedDataTable != null)
                 {
                     dgInput.ItemsSource = _dataStore.ProcessedDataTable.DefaultView;
+                    // После смены ItemsSource колонки пересоздаются — восстанавливаем селекторы и раскраску
+                    InitializeColumnRoleSelectors();
+                    RefreshColumnsVisuals();
                 }
             }), System.Windows.Threading.DispatcherPriority.Background);
         }
@@ -236,16 +240,8 @@ namespace LinearCutWpf.Controls
                     rawDataTable.Rows.Add(dr);
                 }
 
-                dgColumnConfig.ItemsSource = _columnConfigTable.DefaultView;
-                
-                // Инициализируем DataStoreService сырыми данными
+                // Инициализируем DataStoreService сырыми данными (OnProcessedDataChanged обновит UI)
                 _dataStore.Initialize(rawDataTable, _columnConfigTable, _currentFilePath);
-                
-                // Привязываем обработанные данные к UI
-                dgInput.ItemsSource = _dataStore.ProcessedDataTable.DefaultView;
-
-                _columnConfigTable.ColumnChanged -= OnColumnConfigChanged;
-                _columnConfigTable.ColumnChanged += OnColumnConfigChanged;
 
                 DataLoaded?.Invoke(this, EventArgs.Empty);
             }
@@ -277,187 +273,200 @@ namespace LinearCutWpf.Controls
                 return;
             }
 
-            // Подсвечиваем строки, где ключи были автозаполнены
+            // Подсвечиваем только ячейки, где ключи были автозаполнены
+            var autoFilledCols = new List<string>();
             foreach (var key in _dataStore.AutoFilledKeys)
             {
                 if (key.row == rowIndex)
-                {
-                    row.Foreground = Brushes.Red;
-                    break;
-                }
+                    autoFilledCols.Add(key.colName);
             }
-        }
 
-        private void OnDgColumnConfigLoaded(object sender, RoutedEventArgs e)
-        {
-            dgInput.Dispatcher.BeginInvoke(new Action(() =>
+            if (autoFilledCols.Count > 0)
             {
-                RefreshColumnsVisuals();
-            }), System.Windows.Threading.DispatcherPriority.Background);
+                row.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    var presenter = FindVisualChild<DataGridCellsPresenter>(row);
+                    if (presenter == null) return;
+
+                    foreach (var col in dgInput.Columns)
+                    {
+                        string colName = col.Header is ColumnRoleSelector selector ? selector.ColumnName : col.Header?.ToString();
+                        if (string.IsNullOrEmpty(colName)) continue;
+
+                        if (autoFilledCols.Contains(colName))
+                        {
+                            var cell = presenter.ItemContainerGenerator.ContainerFromIndex(dgInput.Columns.IndexOf(col)) as DataGridCell;
+                            if (cell != null)
+                            {
+                                cell.Foreground = Brushes.Red;
+                            }
+                        }
+                    }
+                }), System.Windows.Threading.DispatcherPriority.Background);
+            }
         }
 
         private void OnDgInputAutoGeneratingColumn(object sender, DataGridAutoGeneratingColumnEventArgs e)
         {
-            var keys = GetCheckedCols("IsKey");
-            var names = GetCheckedCols("IsName");
-            var vals = GetCheckedCols("IsVal");
-            var qtys = GetCheckedCols("IsQty");
-            var leftAngles = GetCheckedCols("IsLeftAngle");
-            var rightAngles = GetCheckedCols("IsRightAngle");
-
             string colName = e.PropertyName;
-            Brush bg;
-            if (keys.Contains(colName))
-                bg = Brushes.LightGreen;
-            else if (names.Contains(colName))
-                bg = Brushes.LightPink;
-            else if (vals.Contains(colName))
-                bg = Brushes.LightYellow;
-            else if (qtys.Contains(colName))
-                bg = Brushes.LightCyan;
-            else if (leftAngles.Contains(colName) || rightAngles.Contains(colName))
-                bg = Brushes.LightGray;
-            else
-                bg = Brushes.White;
 
-            var cellStyle = new Style(typeof(DataGridCell));
-            cellStyle.Setters.Add(new Setter(DataGridCell.BackgroundProperty, bg));
-            e.Column.CellStyle = cellStyle;
+            // Скрываем служебный столбец _ArticleKey_
+            if (colName == "_ArticleKey_")
+            {
+                e.Cancel = true;
+                return;
+            }
 
-            var headerStyle = new Style(typeof(DataGridColumnHeader));
-            headerStyle.Setters.Add(new Setter(DataGridColumnHeader.BackgroundProperty, bg));
-            e.Column.HeaderStyle = headerStyle;
+            var selector = new ColumnRoleSelector
+            {
+                ColumnName = colName
+            };
+            selector.RoleChanged += OnColumnRoleChanged;
+
+            // Сохраняем ссылку на селектор
+            _columnRoleSelectors[colName] = selector;
+
+            // Устанавливаем кастомный заголовок
+            e.Column.Header = selector;
+
+            // Раскраска ячеек по ролям будет применена в RefreshColumnsVisuals
         }
 
         private void OnDgInputLoaded(object sender, RoutedEventArgs e)
         {
             dgInput.Dispatcher.BeginInvoke(new Action(() =>
             {
+                InitializeColumnRoleSelectors();
                 RefreshColumnsVisuals();
             }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        /// <summary>
+        /// Инициализирует состояние селекторов ролей из _columnConfigTable.
+        /// </summary>
+        private void InitializeColumnRoleSelectors()
+        {
+            if (_columnConfigTable == null) return;
+
+            foreach (DataRow row in _columnConfigTable.Rows)
+            {
+                string colName = row["ColName"]?.ToString();
+                if (string.IsNullOrEmpty(colName)) continue;
+
+                if (_columnRoleSelectors.TryGetValue(colName, out var selector))
+                {
+                    string[] roleCols = { "IsKey", "IsName", "IsVal", "IsQty", "IsLeftAngle", "IsRightAngle", "IsColor" };
+                    foreach (var roleCol in roleCols)
+                    {
+                        if (row.Table.Columns.Contains(roleCol) && row[roleCol] != DBNull.Value && (bool)row[roleCol])
+                        {
+                            selector.SetRoleChecked(roleCol, true);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void OnColumnRoleChanged(object sender, RoleChangedEventArgs e)
+        {
+            if (_columnConfigTable == null) return;
+
+            // Обновляем _columnConfigTable
+            var row = _columnConfigTable.AsEnumerable().FirstOrDefault(r => r["ColName"]?.ToString() == e.ColumnName);
+            if (row != null)
+            {
+                if (row.Table.Columns.Contains(e.RoleKey))
+                {
+                    row[e.RoleKey] = e.IsChecked;
+                }
+            }
+
+            // Распространяем изменение на все остальные селекторы: если другой столбец имел эту же роль — снимаем
+            // Кроме IsKey, который может быть назначен нескольким столбцам
+            if (e.IsChecked && e.RoleKey != "IsKey")
+            {
+                foreach (var kvp in _columnRoleSelectors)
+                {
+                    if (kvp.Key != e.ColumnName)
+                    {
+                        var otherSelector = kvp.Value;
+                        if (otherSelector.GetCheckedRole() == e.RoleKey)
+                        {
+                            otherSelector.SetRoleChecked(e.RoleKey, false);
+
+                            // Обновляем DataTable
+                            var otherRow = _columnConfigTable.AsEnumerable().FirstOrDefault(r => r["ColName"]?.ToString() == kvp.Key);
+                            if (otherRow != null && otherRow.Table.Columns.Contains(e.RoleKey))
+                            {
+                                otherRow[e.RoleKey] = false;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Обновляем хранилище и UI
+            _dataStore.UpdateColumnConfig(_columnConfigTable);
+            RefreshColumnsVisuals();
+            SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void RefreshColumnsVisuals()
         {
             if (_columnConfigTable == null || dgInput.Columns.Count == 0) return;
 
-            var keys = GetCheckedCols("IsKey");
-            var names = GetCheckedCols("IsName");
-            var vals = GetCheckedCols("IsVal");
-            var qtys = GetCheckedCols("IsQty");
-            var leftAngles = GetCheckedCols("IsLeftAngle");
-            var rightAngles = GetCheckedCols("IsRightAngle");
-
-            dgColumnConfig.UpdateLayout();
-            for (int i = 0; i < _columnConfigTable.Rows.Count; i++)
+            // Цвета ролей
+            var roleColors = new Dictionary<string, Brush>
             {
-                DataRowView rowView = _columnConfigTable.DefaultView[i];
-                var row = dgColumnConfig.ItemContainerGenerator.ContainerFromIndex(i) as DataGridRow;
-                if (row == null) continue;
+                { "IsKey", Brushes.LightGreen },
+                { "IsName", Brushes.LightPink },
+                { "IsVal", Brushes.LightYellow },
+                { "IsQty", Brushes.LightCyan },
+                { "IsLeftAngle", Brushes.LightGray },
+                { "IsRightAngle", Brushes.LightGray },
+                { "IsColor", Brushes.LightSalmon }
+            };
 
-                bool isKey = rowView["IsKey"] != DBNull.Value && (bool)rowView["IsKey"];
-                bool isName = rowView["IsName"] != DBNull.Value && (bool)rowView["IsName"];
-                bool isVal = rowView["IsVal"] != DBNull.Value && (bool)rowView["IsVal"];
-                bool isQty = rowView["IsQty"] != DBNull.Value && (bool)rowView["IsQty"];
-                bool isLeftAngle = rowView.DataView.Table.Columns.Contains("IsLeftAngle") && rowView["IsLeftAngle"] != DBNull.Value && (bool)rowView["IsLeftAngle"];
-                bool isRightAngle = rowView.DataView.Table.Columns.Contains("IsRightAngle") && rowView["IsRightAngle"] != DBNull.Value && (bool)rowView["IsRightAngle"];
-
-                SetCellBackground(dgColumnConfig, row, 1, isKey ? Brushes.LightGreen : Brushes.White);
-                SetCellBackground(dgColumnConfig, row, 2, isName ? Brushes.LightPink : Brushes.White);
-                SetCellBackground(dgColumnConfig, row, 3, isVal ? Brushes.LightYellow : Brushes.White);
-                SetCellBackground(dgColumnConfig, row, 4, isQty ? Brushes.LightCyan : Brushes.White);
-                SetCellBackground(dgColumnConfig, row, 5, isLeftAngle ? Brushes.LightGray : Brushes.White);
-                SetCellBackground(dgColumnConfig, row, 6, isRightAngle ? Brushes.LightGray : Brushes.White);
-            }
+            var baseHeaderStyle = FindResource(typeof(DataGridColumnHeader)) as Style;
+            var baseCellStyle = FindResource(typeof(DataGridCell)) as Style;
 
             foreach (var col in dgInput.Columns)
             {
-                string colName = col.Header?.ToString();
+                string colName = col.Header is ColumnRoleSelector selector ? selector.ColumnName : col.Header?.ToString();
                 if (string.IsNullOrEmpty(colName)) continue;
 
-                Brush bg;
-                if (keys.Contains(colName))
-                    bg = Brushes.LightGreen;
-                else if (names.Contains(colName))
-                    bg = Brushes.LightPink;
-                else if (vals.Contains(colName))
-                    bg = Brushes.LightYellow;
-                else if (qtys.Contains(colName))
-                    bg = Brushes.LightCyan;
-                else if (leftAngles.Contains(colName) || rightAngles.Contains(colName))
-                    bg = Brushes.LightGray;
-                else
-                    bg = Brushes.White;
+                var row = _columnConfigTable.AsEnumerable().FirstOrDefault(r => r["ColName"]?.ToString() == colName);
+                if (row == null) continue;
 
-                var cellStyle = new Style(typeof(DataGridCell));
-                cellStyle.Setters.Add(new Setter(DataGridCell.BackgroundProperty, bg));
-                
-                col.CellStyle = null;
-                col.CellStyle = cellStyle;
-
-                col.HeaderStyle = CreateColumnHeaderStyle(bg);
-            }
-
-            dgInput.UpdateLayout();
-            dgInput.InvalidateVisual();
-            dgInput.Items.Refresh();
-        }
-
-        private void SetCellBackground(DataGrid dataGrid, DataGridRow row, int columnIndex, Brush background)
-        {
-            if (row == null || columnIndex < 0 || columnIndex >= dataGrid.Columns.Count) return;
-
-            row.UpdateLayout();
-
-            var presenter = FindVisualChild<DataGridCellsPresenter>(row);
-            if (presenter == null) return;
-
-            presenter.UpdateLayout();
-
-            var cell = presenter.ItemContainerGenerator.ContainerFromIndex(columnIndex) as DataGridCell;
-            
-            if (cell == null)
-            {
-                for (int i = 0; i < VisualTreeHelper.GetChildrenCount(presenter); i++)
+                Brush roleBrush = null;
+                foreach (var kvp in roleColors)
                 {
-                    var child = VisualTreeHelper.GetChild(presenter, i);
-                    if (child is DataGridCell dataGridCell)
+                    if (row.Table.Columns.Contains(kvp.Key) && row[kvp.Key] != DBNull.Value && (bool)row[kvp.Key])
                     {
-                        if (dataGridCell.Column == dataGrid.Columns[columnIndex])
-                        {
-                            cell = dataGridCell;
-                            break;
-                        }
+                        roleBrush = kvp.Value;
+                        break; // первый найденный цвет
                     }
                 }
+
+                if (roleBrush != null)
+                {
+                    // Стиль заголовка
+                    var headerStyle = new Style(typeof(DataGridColumnHeader), baseHeaderStyle);
+                    headerStyle.Setters.Add(new Setter(Control.BackgroundProperty, roleBrush));
+                    col.HeaderStyle = headerStyle;
+
+                    // Стиль ячеек — раскрашивает весь столбец
+                    var cellStyle = new Style(typeof(DataGridCell), baseCellStyle);
+                    cellStyle.Setters.Add(new Setter(Control.BackgroundProperty, roleBrush));
+                    cellStyle.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Normal));
+                    col.CellStyle = cellStyle;
+                }
+                else
+                {
+                    col.ClearValue(DataGridColumn.HeaderStyleProperty);
+                    col.ClearValue(DataGridColumn.CellStyleProperty);
+                }
             }
-
-            if (cell != null)
-            {
-                cell.Background = background;
-            }
-        }
-
-        private static T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
-        {
-            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-            {
-                var child = VisualTreeHelper.GetChild(parent, i);
-                if (child is T typedChild)
-                    return typedChild;
-
-                var result = FindVisualChild<T>(child);
-                if (result != null)
-                    return result;
-            }
-            return null;
-        }
-
-        private Style CreateColumnHeaderStyle(Brush background)
-        {
-            var style = new Style(typeof(DataGridColumnHeader));
-            style.Setters.Add(new Setter(DataGridColumnHeader.BackgroundProperty, background));
-            return style;
         }
 
         private void OnDefaultStockChanged(object sender, SelectionChangedEventArgs e)
@@ -713,65 +722,12 @@ namespace LinearCutWpf.Controls
             if (columnConfig != null)
             {
                 _columnConfigTable = columnConfig;
-                dgColumnConfig.ItemsSource = _columnConfigTable.DefaultView;
-
-                _columnConfigTable.ColumnChanged -= OnColumnConfigChanged;
-                _columnConfigTable.ColumnChanged += OnColumnConfigChanged;
             }
             
-            // Обновляем обработанные данные через DataStoreService
+            // Обновляем обработанные данные через DataStoreService (OnProcessedDataChanged обновит UI)
             if (mainDataTable != null && columnConfig != null)
             {
                 _dataStore.Initialize(mainDataTable, columnConfig, null);
-                dgInput.ItemsSource = _dataStore.ProcessedDataTable.DefaultView;
-            }
-        }
-
-        private bool _isHandlingColumnChange = false;
-        private bool _isUpdatePending = false;
-
-        private void OnColumnConfigChanged(object sender, DataColumnChangeEventArgs e)
-        {
-            if (_isHandlingColumnChange) return;
-
-            string[] radioCols = { "IsKey", "IsName", "IsVal", "IsQty", "IsLeftAngle", "IsRightAngle", "IsColor" };
-
-            if (radioCols.Contains(e.Column.ColumnName))
-            {
-                if (e.ProposedValue is bool isChecked && isChecked)
-                {
-                    _isHandlingColumnChange = true;
-                    try
-                    {
-                        foreach (var col in radioCols)
-                        {
-                            if (col != e.Column.ColumnName && e.Row.Table.Columns.Contains(col))
-                            {
-                                e.Row[col] = false;
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        _isHandlingColumnChange = false;
-                    }
-                }
-
-                if (!_isUpdatePending)
-                {
-                    _isUpdatePending = true;
-                    Dispatcher.BeginInvoke(new Action(() =>
-                    {
-                        _isUpdatePending = false;
-                        // Обновляем конфигурацию в хранилище
-                        if (_columnConfigTable != null)
-                        {
-                            _dataStore.UpdateColumnConfig(_columnConfigTable);
-                        }
-                        RefreshColumnsVisuals();
-                        SettingsChanged?.Invoke(this, EventArgs.Empty);
-                    }), System.Windows.Threading.DispatcherPriority.Background);
-                }
             }
         }
 
@@ -855,6 +811,21 @@ namespace LinearCutWpf.Controls
             {
                 dgInput.Items.Refresh();
             }
+        }
+
+        private static T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is T typedChild)
+                    return typedChild;
+
+                var result = FindVisualChild<T>(child);
+                if (result != null)
+                    return result;
+            }
+            return null;
         }
 
         public void UpdateArticleSettings(Dictionary<string, ArticleSettings> articleSettings)
