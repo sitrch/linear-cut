@@ -63,6 +63,14 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="ColorCell" TargetType="DataGridCell">
+            <Setter Property="Background" Value="White"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsColor}" Value="True">
+                    <Setter Property="Background" Value="LightSalmon"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -85,12 +93,13 @@
                           Loaded="OnDgColumnConfigLoaded">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Столбец" Binding="{Binding ColName}" IsReadOnly="True" Width="*"/>
-                        <DataGridCheckBoxColumn Header="Key" Binding="{Binding IsKey, UpdateSourceTrigger=PropertyChanged}" Width="50" CellStyle="{StaticResource KeyCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
-                        <DataGridCheckBoxColumn Header="Наимен." Binding="{Binding IsName, UpdateSourceTrigger=PropertyChanged}" Width="60" CellStyle="{StaticResource NameCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
-                        <DataGridCheckBoxColumn Header="Value" Binding="{Binding IsVal, UpdateSourceTrigger=PropertyChanged}" Width="50" CellStyle="{StaticResource ValCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
-                        <DataGridCheckBoxColumn Header="Quantity" Binding="{Binding IsQty, UpdateSourceTrigger=PropertyChanged}" Width="50" CellStyle="{StaticResource QtyCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
-                        <DataGridCheckBoxColumn Header="Лев" Binding="{Binding IsLeftAngle, UpdateSourceTrigger=PropertyChanged}" Width="50" CellStyle="{StaticResource LeftAngleCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
-                        <DataGridCheckBoxColumn Header="Прав" Binding="{Binding IsRightAngle, UpdateSourceTrigger=PropertyChanged}" Width="50" CellStyle="{StaticResource RightAngleCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
+                        <DataGridCheckBoxColumn Header="Key" Binding="{Binding IsKey, UpdateSourceTrigger=PropertyChanged}" Width="40" CellStyle="{StaticResource KeyCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
+                        <DataGridCheckBoxColumn Header="Наимен." Binding="{Binding IsName, UpdateSourceTrigger=PropertyChanged}" Width="50" CellStyle="{StaticResource NameCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
+                        <DataGridCheckBoxColumn Header="Value" Binding="{Binding IsVal, UpdateSourceTrigger=PropertyChanged}" Width="40" CellStyle="{StaticResource ValCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
+                        <DataGridCheckBoxColumn Header="Quantity" Binding="{Binding IsQty, UpdateSourceTrigger=PropertyChanged}" Width="40" CellStyle="{StaticResource QtyCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
+                        <DataGridCheckBoxColumn Header="Лев" Binding="{Binding IsLeftAngle, UpdateSourceTrigger=PropertyChanged}" Width="40" CellStyle="{StaticResource LeftAngleCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
+                        <DataGridCheckBoxColumn Header="Прав" Binding="{Binding IsRightAngle, UpdateSourceTrigger=PropertyChanged}" Width="40" CellStyle="{StaticResource RightAngleCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
+                        <DataGridCheckBoxColumn Header="Цвет" Binding="{Binding IsColor, UpdateSourceTrigger=PropertyChanged}" Width="45" CellStyle="{StaticResource ColorCell}" ElementStyle="{StaticResource CheckBoxStyle}" EditingElementStyle="{StaticResource CheckBoxStyle}"/>
                     </DataGrid.Columns>
                 </DataGrid>
 

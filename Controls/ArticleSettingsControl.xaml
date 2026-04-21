@@ -7,6 +7,99 @@
              xmlns:converters="clr-namespace:LinearCutWpf.Converters"
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800">
+    <UserControl.Resources>
+        <ControlTemplate x:Key="BarLengthComboBoxTemplate" TargetType="ComboBox">
+            <Grid>
+                <Border x:Name="Border"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}">
+                    <ToggleButton x:Name="ToggleButton"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  HorizontalAlignment="Stretch"
+                                  VerticalAlignment="Stretch"
+                                  HorizontalContentAlignment="Stretch"
+                                  ClickMode="Press"
+                                  IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding SelectedItem.DisplayLength, RelativeSource={RelativeSource TemplatedParent}}"
+                                       VerticalAlignment="Center"
+                                       Margin="3,0,0,0"/>
+                            <Path Grid.Column="1"
+                                  Data="M 0 0 L 4 4 L 8 0 Z"
+                                  Fill="{TemplateBinding Foreground}"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,5,0"/>
+                        </Grid>
+                    </ToggleButton>
+                </Border>
+                <Popup x:Name="PART_Popup"
+                       IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                       Placement="Bottom"
+                       AllowsTransparency="True">
+                    <Border Background="White"
+                            BorderBrush="Gray"
+                            BorderThickness="1">
+                        <ScrollViewer>
+                            <ItemsPresenter/>
+                        </ScrollViewer>
+                    </Border>
+                </Popup>
+            </Grid>
+        </ControlTemplate>
+
+        <ControlTemplate x:Key="PresetComboBoxTemplate" TargetType="ComboBox">
+            <Grid>
+                <Border x:Name="Border"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}">
+                    <ToggleButton x:Name="ToggleButton"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  HorizontalAlignment="Stretch"
+                                  VerticalAlignment="Stretch"
+                                  HorizontalContentAlignment="Stretch"
+                                  ClickMode="Press"
+                                  IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding SelectedItem.Name, RelativeSource={RelativeSource TemplatedParent}}"
+                                       VerticalAlignment="Center"
+                                       Margin="3,0,0,0"/>
+                            <Path Grid.Column="1"
+                                  Data="M 0 0 L 4 4 L 8 0 Z"
+                                  Fill="{TemplateBinding Foreground}"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,5,0"/>
+                        </Grid>
+                    </ToggleButton>
+                </Border>
+                <Popup x:Name="PART_Popup"
+                       IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                       Placement="Bottom"
+                       AllowsTransparency="True">
+                    <Border Background="White"
+                            BorderBrush="Gray"
+                            BorderThickness="1">
+                        <ScrollViewer>
+                            <ItemsPresenter/>
+                        </ScrollViewer>
+                    </Border>
+                </Popup>
+            </Grid>
+        </ControlTemplate>
+    </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -51,14 +144,46 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Кол-во деталей" Binding="{Binding TotalCount}" IsReadOnly="True" Width="120"/>
-                
+
                 <DataGridTemplateColumn Header="Длина хлыста" Width="150">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=AvailableStockLengths}"
-                                      SelectedValue="{Binding SelectedBarLength, UpdateSourceTrigger=PropertyChanged}"
-                                      DisplayMemberPath="Length" SelectedValuePath="Length"
-                                      ToolTip="Оставьте пустым для использования длины по умолчанию"/>
+                            <Grid>
+                                <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=AvailableStockLengths}"
+                                          SelectedValue="{Binding SelectedBarLength, UpdateSourceTrigger=PropertyChanged}"
+                                          DisplayMemberPath="DisplayLength" SelectedValuePath="Length"
+                                          SelectionChanged="OnBarLengthCellSelectionChanged"
+                                          ToolTip="Выберите значение или оставьте пустым для использования длины по умолчанию">
+                                    <ComboBox.Style>
+                                        <Style TargetType="ComboBox">
+                                            <Setter Property="Template" Value="{StaticResource BarLengthComboBoxTemplate}"/>
+                                            <Setter Property="Background" Value="White"/>
+                                            <Setter Property="Foreground" Value="Black"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsBarLengthDefaultValue}" Value="True">
+                                                    <Setter Property="Background" Value="#E6E6E6"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ComboBox.Style>
+                                </ComboBox>
+                                <TextBlock Text="{Binding DisplayDefaultBarLength}"
+                                           Foreground="#808080"
+                                           VerticalAlignment="Center"
+                                           Margin="5,0,0,0"
+                                           IsHitTestVisible="False">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsBarLengthDefaultValue}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
@@ -66,10 +191,42 @@
                 <DataGridTemplateColumn Header="Пресет" Width="150">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=AvailablePresets}"
-                                      SelectedItem="{Binding SelectedPreset, UpdateSourceTrigger=PropertyChanged}"
-                                      DisplayMemberPath="Name"
-                                      ToolTip="Оставьте пустым для использования пресета по умолчанию"/>
+                            <Grid>
+                                <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=AvailablePresets}"
+                                          SelectedItem="{Binding SelectedPreset, UpdateSourceTrigger=PropertyChanged}"
+                                          DisplayMemberPath="Name"
+                                          SelectionChanged="OnPresetCellSelectionChanged"
+                                          ToolTip="Выберите значение или оставьте пустым для использования пресета по умолчанию">
+                                    <ComboBox.Style>
+                                        <Style TargetType="ComboBox">
+                                            <Setter Property="Template" Value="{StaticResource PresetComboBoxTemplate}"/>
+                                            <Setter Property="Background" Value="White"/>
+                                            <Setter Property="Foreground" Value="Black"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsPresetDefaultValue}" Value="True">
+                                                    <Setter Property="Background" Value="#E6E6E6"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ComboBox.Style>
+                                </ComboBox>
+                                <TextBlock Text="{Binding DisplayDefaultPresetName}"
+                                           Foreground="#808080"
+                                           VerticalAlignment="Center"
+                                           Margin="5,0,0,0"
+                                           IsHitTestVisible="False">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsPresetDefaultValue}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

@@ -28,6 +28,9 @@ namespace LinearCutWpf.Controls
         private DataTable _gridInput;
         private Func<string, List<string>> _getCheckedCols;
         private HashSet<int> _invalidRows;
+        private Services.DataStoreService _dataStore => Services.DataStoreService.Instance;
+
+        public DataTable MainDataTable => _dataStore?.ProcessedDataTable;
 
         /// <summary>
         /// Событие, вызываемое при изменении свойства (реализация INotifyPropertyChanged).
@@ -216,8 +219,89 @@ namespace LinearCutWpf.Controls
 
         /// <summary>
         /// Выполняет группировку входных данных по артикулам и создает вкладки для каждого артикула.
+        /// Использует DataStoreService для получения DataView по каждому артикулу.
         /// </summary>
         public void RunGroupingWithTabs()
+        {
+            // Проверяем, есть ли данные в хранилище
+            if (_dataStore.ProcessedDataTable == null)
+            {
+                // Fallback к старой логике, если хранилище пустое
+                RunGroupingWithTabsLegacy();
+                return;
+            }
+
+            var keys = _getCheckedCols("IsKey");
+            var vals = _getCheckedCols("IsVal");
+
+            _groupingTabControl.Items.Clear();
+            _tabToArticle.Clear();
+            _articleGroupingControls.Clear();
+            
+            if (!keys.Any() || !vals.Any())
+            {
+                UpdateHintVisibility();
+                return;
+            }
+
+            // Получаем уникальные артикулы из хранилища
+            var uniqueArticles = _dataStore.GetUniqueArticles();
+
+            foreach (var articleName in uniqueArticles)
+            {
+                // Игнорируем пустые артикулы
+                if (string.IsNullOrWhiteSpace(articleName)) continue;
+
+                var settings = GetOrCreateArticleSettings(articleName);
+                bool isCustom = settings.HasCustomSettings(_defaultBarLength, _defaultPreset);
+
+                TabItem tp = new TabItem();
+                tp.Header = articleName;
+                tp.Background = isCustom ? Brushes.MistyRose : Brushes.White;
+                _tabToArticle[tp] = articleName;
+
+                // Получаем DataView для артикула из хранилища
+                DataView articleView = _dataStore.GetArticleView(articleName);
+
+                ArticleGroupingControl articleCtrl = new ArticleGroupingControl();
+                
+                // Привязка ширины левой панели
+                System.Windows.Data.Binding binding = new System.Windows.Data.Binding(nameof(LeftPanelWidth))
+                {
+                    Source = this,
+                    Mode = System.Windows.Data.BindingMode.TwoWay
+                };
+                articleCtrl.SetBinding(ArticleGroupingControl.LeftPanelWidthProperty, binding);
+
+                articleCtrl.Initialize(articleName, settings,
+                    _defaultBarLength, _defaultPreset,
+                    _stockLengths, _presets,
+                    _dataStore.ProcessedDataTable, _getCheckedCols,
+                    keys, vals, _getCheckedCols("IsQty").FirstOrDefault(), articleView);
+
+                articleCtrl.SettingsChanged += (art) =>
+                {
+                    ColorTab(art);
+                };
+
+                tp.Content = articleCtrl;
+                _groupingTabControl.Items.Add(tp);
+                _articleGroupingControls[articleName] = articleCtrl;
+            }
+
+            if (_groupingTabControl.Items.Count > 0)
+            {
+                _groupingTabControl.SelectedIndex = 0;
+                RecolorAllTabs();
+            }
+
+            UpdateHintVisibility();
+        }
+
+        /// <summary>
+        /// Старая логика группировки (fallback, если хранилище пустое).
+        /// </summary>
+        private void RunGroupingWithTabsLegacy()
         {
             if (_gridInput == null) return;
 

@@ -43,6 +43,11 @@ namespace LinearCutWpf.Models
     {
         public double Length { get; set; }
         public bool IsEnabled { get; set; } = true;
+
+        /// <summary>
+        /// Отображаемое значение длины. Возвращает пустую строку для значения по умолчанию (0).
+        /// </summary>
+        public string DisplayLength => Length == 0 ? "" : Length.ToString();
     }
 
     /// <summary>
@@ -359,6 +364,8 @@ namespace LinearCutWpf.Models
         private double? _selectedVisibleHeight;
         private bool _isDefaultValue;
         private bool _isManuallyChanged;
+        private bool _isBarLengthDefaultValue;
+        private bool _isPresetDefaultValue;
 
         public string ArticleName
         {
@@ -412,6 +419,33 @@ namespace LinearCutWpf.Models
         {
             get => _isManuallyChanged;
             set { _isManuallyChanged = value; OnPropertyChanged(nameof(IsManuallyChanged)); }
+        }
+
+        public bool IsBarLengthDefaultValue
+        {
+            get => _isBarLengthDefaultValue;
+            set { _isBarLengthDefaultValue = value; OnPropertyChanged(nameof(IsBarLengthDefaultValue)); }
+        }
+
+        public bool IsPresetDefaultValue
+        {
+            get => _isPresetDefaultValue;
+            set { _isPresetDefaultValue = value; OnPropertyChanged(nameof(IsPresetDefaultValue)); }
+        }
+
+        private double? _displayDefaultBarLength;
+        private string _displayDefaultPresetName;
+
+        public double? DisplayDefaultBarLength
+        {
+            get => _displayDefaultBarLength;
+            set { _displayDefaultBarLength = value; OnPropertyChanged(nameof(DisplayDefaultBarLength)); }
+        }
+
+        public string DisplayDefaultPresetName
+        {
+            get => _displayDefaultPresetName;
+            set { _displayDefaultPresetName = value; OnPropertyChanged(nameof(DisplayDefaultPresetName)); }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

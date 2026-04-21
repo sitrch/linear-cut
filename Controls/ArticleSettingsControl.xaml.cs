@@ -26,7 +26,9 @@ namespace LinearCutWpf.Controls
         /// Высота по умолчанию для артикулов.
         /// </summary>
         public double? DefaultVisibleHeight { get; set; }
-        
+        public double DefaultBarLength { get; set; }
+        public PresetModel DefaultPreset { get; set; }
+
         // Словарь для отслеживания оригинальных значений высот
         private Dictionary<string, double?> _originalHeights = new Dictionary<string, double?>();
         
@@ -137,6 +139,42 @@ namespace LinearCutWpf.Controls
             // OnPropertyChanged вызывается автоматически при изменении SelectedVisibleHeight
         }
 
+        /// <summary>
+        /// Обработчик изменения выбора длины хлыста.
+        /// </summary>
+        private void OnBarLengthCellSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox comboBox && comboBox.DataContext is ArticleGroupingRow row)
+            {
+                if (comboBox.SelectedValue is double length && length > 0)
+                {
+                    row.IsBarLengthDefaultValue = false;
+                }
+                else
+                {
+                    row.IsBarLengthDefaultValue = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Обработчик изменения выбора пресета.
+        /// </summary>
+        private void OnPresetCellSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox comboBox && comboBox.DataContext is ArticleGroupingRow row)
+            {
+                if (comboBox.SelectedItem is PresetModel preset && !string.IsNullOrEmpty(preset.Name))
+                {
+                    row.IsPresetDefaultValue = false;
+                }
+                else
+                {
+                    row.IsPresetDefaultValue = true;
+                }
+            }
+        }
+
 
         /// <summary>
         /// Обновляет значения высот по умолчанию для всех ячеек, которые не были изменены вручную.
@@ -165,8 +203,11 @@ namespace LinearCutWpf.Controls
         /// <param name="stockLengths">Список доступных длин хлыстов.</param>
         /// <param name="presets">Список доступных пресетов настроек раскроя.</param>
         /// <param name="existingSettings">Словарь с ранее заданными настройками артикулов, чтобы восстановить выбор пользователя.</param>
-        public void Initialize(DataTable dataTable, List<string> keyCols, List<string> nameCols, List<string> qtyCols, List<string> valCols, ObservableCollection<StockLengthModel> stockLengths, ObservableCollection<PresetModel> presets, Dictionary<string, ArticleSettings> existingSettings)
+        public void Initialize(DataTable dataTable, List<string> keyCols, List<string> nameCols, List<string> qtyCols, List<string> valCols, ObservableCollection<StockLengthModel> stockLengths, ObservableCollection<PresetModel> presets, Dictionary<string, ArticleSettings> existingSettings, double defaultBarLengthValue = 0, PresetModel defaultPreset = null)
         {
+            DefaultBarLength = defaultBarLengthValue;
+            DefaultPreset = defaultPreset;
+
             AvailableStockLengths.Clear();
             AvailableStockLengths.Add(new StockLengthModel { Length = 0 }); // Для пустого значения (по умолчанию)
             foreach (var stock in stockLengths)
@@ -258,11 +299,25 @@ namespace LinearCutWpf.Controls
                 if (existingSettings != null && existingSettings.TryGetValue(articleName, out var settings))
                 {
                     rowModel.SelectedBarLength = settings.BarLength;
+                    rowModel.IsBarLengthDefaultValue = !settings.BarLength.HasValue;
                     if (settings.Preset != null)
                     {
                         rowModel.SelectedPreset = AvailablePresets.FirstOrDefault(p => p.Name == settings.Preset.Name);
+                        rowModel.IsPresetDefaultValue = rowModel.SelectedPreset == null || string.IsNullOrEmpty(rowModel.SelectedPreset.Name);
+                    }
+                    else
+                    {
+                        rowModel.IsPresetDefaultValue = true;
                     }
                 }
+                else
+                {
+                    rowModel.IsBarLengthDefaultValue = true;
+                    rowModel.IsPresetDefaultValue = true;
+                }
+
+                rowModel.DisplayDefaultBarLength = DefaultBarLength;
+                rowModel.DisplayDefaultPresetName = DefaultPreset != null ? DefaultPreset.Name : "";
 
                 Articles.Add(rowModel);
             }

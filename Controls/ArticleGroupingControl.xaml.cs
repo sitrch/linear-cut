@@ -45,6 +45,7 @@ namespace LinearCutWpf.Controls
         private List<string> _vals;
         private string _qty;
         private DataRow[] _articleRows;
+        private DataView _articleView;
 
         private ManualCutControl _manualCutControl;
 
@@ -72,7 +73,7 @@ namespace LinearCutWpf.Controls
         }
 
         /// <summary>
-        /// Инициализация контрола данными артикула
+        /// Инициализация контрола данными артикула (через DataRow[])
         /// </summary>
         public void Initialize(string articleName, ArticleSettings settings,
             double defaultBarLength, PresetModel defaultPreset,
@@ -93,9 +94,72 @@ namespace LinearCutWpf.Controls
             _vals = vals;
             _qty = qty;
             _articleRows = articleRows;
+            _articleView = null;
 
             BuildLeftPanel();
             BuildRightPanel(_articleRows);
+        }
+
+        /// <summary>
+        /// Инициализация контрола данными артикула (через DataView)
+        /// </summary>
+        public void Initialize(string articleName, ArticleSettings settings,
+            double defaultBarLength, PresetModel defaultPreset,
+            ObservableCollection<StockLengthModel> stockLengths, List<PresetModel> presets,
+            DataTable gridInput, Func<string, List<string>> getCheckedCols,
+            List<string> keys, List<string> vals, string qty,
+            DataView articleView)
+        {
+            _articleName = articleName;
+            _settings = settings;
+            _defaultBarLength = defaultBarLength;
+            _defaultPreset = defaultPreset;
+            _stockLengths = stockLengths;
+            _presets = presets;
+            _gridInput = gridInput;
+            _getCheckedCols = getCheckedCols;
+            _keys = keys;
+            _vals = vals;
+            _qty = qty;
+            _articleView = articleView;
+            _articleRows = null;
+
+            // Подписываемся на изменения DataView
+            if (_articleView != null)
+            {
+                ((IBindingList)_articleView).ListChanged += OnArticleViewListChanged;
+            }
+
+            BuildLeftPanel();
+            BuildRightPanelFromView();
+
+            // Отписка при выгрузке
+            this.Unloaded += (s, e) =>
+            {
+                if (_articleView != null)
+                {
+                    ((IBindingList)_articleView).ListChanged -= OnArticleViewListChanged;
+                }
+            };
+        }
+
+        /// <summary>
+        /// Обработчик изменения DataView (для реактивного обновления)
+        /// </summary>
+        private void OnArticleViewListChanged(object sender, ListChangedEventArgs e)
+        {
+            if (e.ListChangedType == ListChangedType.Reset || 
+                e.ListChangedType == ListChangedType.ItemAdded || 
+                e.ListChangedType == ListChangedType.ItemDeleted ||
+                e.ListChangedType == ListChangedType.ItemChanged)
+            {
+                // Пересчитываем правую панель при изменении данных
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    BuildRightPanelFromView();
+                    UpdateInfoBlock();
+                }), System.Windows.Threading.DispatcherPriority.Background);
+            }
         }
 
         /// <summary>
@@ -159,9 +223,26 @@ namespace LinearCutWpf.Controls
             var itemSizes = new List<string>();
             var itemQuantities = new List<int>();
 
-            if (_articleRows != null && _vals.Any())
+            // Определяем источник данных: DataRow[] или DataView
+            IEnumerable<DataRow> rowsToProcess = null;
+            
+            if (_articleRows != null)
             {
-                foreach (DataRow row in _articleRows)
+                rowsToProcess = _articleRows;
+            }
+            else if (_articleView != null)
+            {
+                var rows = new List<DataRow>();
+                foreach (DataRowView rowView in _articleView)
+                {
+                    rows.Add(rowView.Row);
+                }
+                rowsToProcess = rows;
+            }
+
+            if (rowsToProcess != null && _vals.Any())
+            {
+                foreach (DataRow row in rowsToProcess)
                 {
                     var valObj = row[_vals.First()];
                     if (valObj == DBNull.Value || string.IsNullOrWhiteSpace(valObj?.ToString())) continue;
@@ -238,6 +319,71 @@ namespace LinearCutWpf.Controls
             // Подсвечиваем таб после обновления данных
             SettingsChanged?.Invoke(_articleName);
             UpdateIndicators();
+        }
+
+        /// <summary>
+        /// Строит правую панель детализации из DataView.
+        /// </summary>
+        private void BuildRightPanelFromView()
+        {
+            if (_articleView == null) return;
+
+            var partsList = new ObservableCollection<PartItem>();
+
+            // Группируем по комбинации ключей и значений, чтобы схлопнуть одинаковые детали
+            var groupKeys = _keys.Concat(_vals).ToList();
+            
+            // Преобразуем DataView в список DataRow для группировки
+            var rows = new List<DataRow>();
+            foreach (DataRowView rowView in _articleView)
+            {
+                rows.Add(rowView.Row);
+            }
+
+            foreach (var sg in rows.GroupBy(r => string.Join("|", groupKeys.Select(k => r[k]?.ToString()))))
+            {
+                var firstRow = sg.First();
+                string article = DataHelper.GetArticleName(_keys.Select(k => firstRow[k]?.ToString()));
+                
+                double length = 0;
+                if (_vals.Any() && firstRow[_vals.First()] != DBNull.Value)
+                {
+                    string valStr = firstRow[_vals.First()].ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                    double.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out length);
+                }
+
+                int qtySum = 0;
+                if (!string.IsNullOrEmpty(_qty))
+                {
+                    foreach (var r in sg)
+                    {
+                        var qtyVal = r[_qty];
+                        if (qtyVal != DBNull.Value && !string.IsNullOrWhiteSpace(qtyVal?.ToString()))
+                        {
+                            string qtyStr = qtyVal.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                            if (double.TryParse(qtyStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out double q) && q > 0)
+                            {
+                                qtySum += (int)q;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    qtySum = sg.Count(); // Если колонки количества нет, считаем строки
+                }
+
+                partsList.Add(new PartItem
+                {
+                    Article = article,
+                    Length = length,
+                    Count = qtySum
+                });
+            }
+
+            // Сортировка по длине по убыванию
+            var sortedParts = partsList.OrderByDescending(p => p.Length).ToList();
+            gridDetails.ItemsSource = sortedParts;
         }
 
         /// <summary>
@@ -411,9 +557,26 @@ namespace LinearCutWpf.Controls
             var parts = new List<double>();
             double totalPartsLength = 0;
 
-            if (_articleRows != null && _vals.Any())
+            // Определяем источник данных: DataRow[] или DataView
+            IEnumerable<DataRow> rowsToProcess = null;
+            
+            if (_articleRows != null)
             {
-                foreach (DataRow row in _articleRows)
+                rowsToProcess = _articleRows;
+            }
+            else if (_articleView != null)
+            {
+                var rows = new List<DataRow>();
+                foreach (DataRowView rowView in _articleView)
+                {
+                    rows.Add(rowView.Row);
+                }
+                rowsToProcess = rows;
+            }
+
+            if (rowsToProcess != null && _vals.Any())
+            {
+                foreach (DataRow row in rowsToProcess)
                 {
                     var valObj = row[_vals.First()];
                     if (valObj == DBNull.Value || string.IsNullOrWhiteSpace(valObj?.ToString())) continue;

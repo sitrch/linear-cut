@@ -66,11 +66,19 @@ namespace LinearCutWpf
 
         private void OnDataLoaded(object sender, System.EventArgs e)
         {
+            // Данные уже инициализированы в DataSettingsControl.LoadDataFromSheet
+            // Просто обновляем настройки артикулов
             UpdateArticleSettings();
         }
 
         private void OnSettingsChanged(object sender, System.EventArgs e)
         {
+            // Обновляем конфигурацию столбцов в хранилище
+            if (dataSettingsControl.ColumnConfigTable != null)
+            {
+                DataStoreService.Instance.UpdateColumnConfig(dataSettingsControl.ColumnConfigTable);
+            }
+            
             UpdateArticleSettings();
         }
 
@@ -90,7 +98,9 @@ namespace LinearCutWpf
                 dataSettingsControl.GetCheckedCols("IsVal"),
                 new ObservableCollection<StockLengthModel>(dataSettingsControl.StockLengths),
                 new ObservableCollection<PresetModel>(dataSettingsControl.Presets),
-                currentSettings
+                currentSettings,
+                dataSettingsControl.DefaultBarLength,
+                dataSettingsControl.DefaultPreset
             );
         }
 
@@ -200,16 +210,18 @@ namespace LinearCutWpf
             if (articleSettingsControl != null)
             {
                 // Обновляем настройки в ArticleSettingsControl (загрузка происходит внутри Initialize)
-                articleSettingsControl.Initialize(
-                    dataSettingsControl.MainDataTable,
-                    dataSettingsControl.GetCheckedCols("IsKey"),
-                    dataSettingsControl.GetCheckedCols("IsName"),
-                    dataSettingsControl.GetCheckedCols("IsQty"),
-                    dataSettingsControl.GetCheckedCols("IsVal"),
-                    new ObservableCollection<StockLengthModel>(dataSettingsControl.StockLengths),
-                    new ObservableCollection<PresetModel>(dataSettingsControl.Presets),
-                    new System.Collections.Generic.Dictionary<string, ArticleSettings>()
-                );
+            articleSettingsControl.Initialize(
+                dataSettingsControl.MainDataTable,
+                dataSettingsControl.GetCheckedCols("IsKey"),
+                dataSettingsControl.GetCheckedCols("IsName"),
+                dataSettingsControl.GetCheckedCols("IsQty"),
+                dataSettingsControl.GetCheckedCols("IsVal"),
+                new ObservableCollection<StockLengthModel>(dataSettingsControl.StockLengths),
+                new ObservableCollection<PresetModel>(dataSettingsControl.Presets),
+                new System.Collections.Generic.Dictionary<string, ArticleSettings>(),
+                dataSettingsControl.DefaultBarLength,
+                dataSettingsControl.DefaultPreset
+            );
             }
         }
 

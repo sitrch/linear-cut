@@ -22,10 +22,9 @@ namespace LinearCutWpf.Controls
     public partial class DataSettingsControl : UserControl
     {
         private string _currentFilePath;
-        private DataTable _mainDataTable;
-        private HashSet<(int row, string colName)> _autoFilledKeys = new HashSet<(int, string)>();
         private HashSet<int> _invalidRows = new HashSet<int>();
         private bool _isLoading = false;
+        private DataStoreService _dataStore => DataStoreService.Instance;
 
         private double _defaultBarLength = 6000;
         private PresetModel _defaultPreset = null;
@@ -39,7 +38,7 @@ namespace LinearCutWpf.Controls
         public PresetModel DefaultPreset => _defaultPreset;
         public List<PresetModel> Presets => _presets;
         public List<StockLengthModel> StockLengths => _stockLengths;
-        public DataTable MainDataTable => _mainDataTable;
+        public DataTable MainDataTable => _dataStore.ProcessedDataTable;
         public DataTable ColumnConfigTable => _columnConfigTable;
         public HashSet<int> InvalidRows => _invalidRows;
         public string ObjectName => tbObjectName.Text.Trim();
@@ -61,6 +60,25 @@ namespace LinearCutWpf.Controls
         {
             InitializeComponent();
             LoadInitialData();
+            
+            // Подписываемся на изменения обработанных данных
+            _dataStore.ProcessedDataChanged += OnProcessedDataChanged;
+            
+            this.Unloaded += (s, e) =>
+            {
+                _dataStore.ProcessedDataChanged -= OnProcessedDataChanged;
+            };
+        }
+
+        private void OnProcessedDataChanged(object sender, EventArgs e)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_dataStore.ProcessedDataTable != null)
+                {
+                    dgInput.ItemsSource = _dataStore.ProcessedDataTable.DefaultView;
+                }
+            }), System.Windows.Threading.DispatcherPriority.Background);
         }
 
         private void LoadInitialData()
@@ -114,7 +132,6 @@ namespace LinearCutWpf.Controls
             var ofd = new OpenFileDialog { Filter = "Excel|*.xlsx" };
             if (ofd.ShowDialog() == true)
             {
-                // Проверяем, не занят ли файл другим приложением
                 if (IsFileLocked(ofd.FileName))
                 {
                     MessageBox.Show($"Файл \"{ofd.FileName}\" занят другим приложением.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -125,14 +142,24 @@ namespace LinearCutWpf.Controls
                 _isLoading = true;
                 cbSheetSelector.Items.Clear();
 
-                using (var workbook = new XLWorkbook(_currentFilePath))
+                try
                 {
-                    foreach (var ws in workbook.Worksheets)
+                    using (var workbook = new XLWorkbook(_currentFilePath))
                     {
-                        var usedRange = ws.RangeUsed();
-                        if (usedRange != null && usedRange.RowCount() > 0)
-                            cbSheetSelector.Items.Add(ws.Name);
+                        foreach (var ws in workbook.Worksheets)
+                        {
+                            var usedRange = ws.RangeUsed();
+                            if (usedRange != null && usedRange.RowCount() > 0)
+                                cbSheetSelector.Items.Add(ws.Name);
+                        }
                     }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Не удалось загрузить файл Excel: {ex.Message}\n\nФайл может содержать неисправные сводные таблицы.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    _currentFilePath = null;
+                    _isLoading = false;
+                    return;
                 }
 
                 _isLoading = false;
@@ -141,11 +168,6 @@ namespace LinearCutWpf.Controls
             }
         }
 
-        /// <summary>
-        /// Проверяет, заблокирован ли файл другим процессом.
-        /// </summary>
-        /// <param name="filePath">Путь к файлу для проверки.</param>
-        /// <returns>True, если файл занят; иначе False.</returns>
         private bool IsFileLocked(string filePath)
         {
             try
@@ -174,15 +196,15 @@ namespace LinearCutWpf.Controls
             {
                 using var workbook = new XLWorkbook(_currentFilePath);
                 var ws = workbook.Worksheet(sheetName);
-                _mainDataTable = new DataTable();
+                var rawDataTable = new DataTable();
 
                 var headerRow = ws.FirstRowUsed();
                 if (headerRow == null) { MessageBox.Show("Лист пуст!"); return; }
 
                 foreach (var cell in headerRow.CellsUsed())
-                    _mainDataTable.Columns.Add(cell.GetString());
+                    rawDataTable.Columns.Add(cell.GetString());
 
-                // Сначала создаем конфигурацию столбцов
+                // Создаем конфигурацию столбцов
                 _columnConfigTable = new DataTable();
                 _columnConfigTable.Columns.Add("ColName", typeof(string));
                 _columnConfigTable.Columns.Add("IsKey", typeof(bool));
@@ -191,15 +213,16 @@ namespace LinearCutWpf.Controls
                 _columnConfigTable.Columns.Add("IsQty", typeof(bool));
                 _columnConfigTable.Columns.Add("IsLeftAngle", typeof(bool));
                 _columnConfigTable.Columns.Add("IsRightAngle", typeof(bool));
+                _columnConfigTable.Columns.Add("IsColor", typeof(bool));
 
-                foreach (DataColumn c in _mainDataTable.Columns)
-                    _columnConfigTable.Rows.Add(c.ColumnName, false, false, false, false, false, false);
+                foreach (DataColumn c in rawDataTable.Columns)
+                    _columnConfigTable.Rows.Add(c.ColumnName, false, false, false, false, false, false, false);
 
-                // Затем читаем данные
+                // Читаем данные
                 foreach (var row in ws.RowsUsed().Skip(1))
                 {
-                    DataRow dr = _mainDataTable.NewRow();
-                    for (int i = 0; i < _mainDataTable.Columns.Count; i++)
+                    DataRow dr = rawDataTable.NewRow();
+                    for (int i = 0; i < rawDataTable.Columns.Count; i++)
                     {
                         if (row.Cell(i + 1).IsEmpty())
                         {
@@ -207,102 +230,26 @@ namespace LinearCutWpf.Controls
                         }
                         else
                         {
-                            string cellValue = row.Cell(i + 1).GetString().Trim();
-                            // Точку на запятую будем менять потом, при обработке данных
-                            // так как во время импорта мы еще не знаем, какой столбец является Value или Quantity.
-                            dr[i] = cellValue;
+                            dr[i] = row.Cell(i + 1).GetString().Trim();
                         }
                     }
-                    _mainDataTable.Rows.Add(dr);
+                    rawDataTable.Rows.Add(dr);
                 }
 
                 dgColumnConfig.ItemsSource = _columnConfigTable.DefaultView;
-                ProcessDataLogic();
+                
+                // Инициализируем DataStoreService сырыми данными
+                _dataStore.Initialize(rawDataTable, _columnConfigTable, _currentFilePath);
+                
+                // Привязываем обработанные данные к UI
+                dgInput.ItemsSource = _dataStore.ProcessedDataTable.DefaultView;
 
-                // Подписываемся на изменения данных в DataTable для обновления цветов и логики "радиокнопок"
                 _columnConfigTable.ColumnChanged -= OnColumnConfigChanged;
                 _columnConfigTable.ColumnChanged += OnColumnConfigChanged;
 
                 DataLoaded?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex) { MessageBox.Show("Ошибка загрузки: " + ex.Message); }
-        }
-
-        private void ProcessDataLogic()
-        {
-            if (_mainDataTable == null) return;
-            DataTable dt = _mainDataTable.Copy();
-            _autoFilledKeys.Clear();
-
-            var keys = GetCheckedCols("IsKey");
-            var vals = GetCheckedCols("IsVal");
-
-            var qtys = GetCheckedCols("IsQty");
-            var leftAngles = GetCheckedCols("IsLeftAngle");
-            var rightAngles = GetCheckedCols("IsRightAngle");
-
-            // Меняем точку на запятую в столбцах Value и Qty
-            foreach (var valCol in vals)
-            {
-                foreach (DataRow r in dt.Rows)
-                {
-                    if (r[valCol] != DBNull.Value)
-                    {
-                        string strVal = r[valCol].ToString();
-                        if (strVal.Contains('.'))
-                            r[valCol] = strVal.Replace('.', ',');
-                    }
-                }
-            }
-
-            foreach (var qtyCol in qtys)
-            {
-                foreach (DataRow r in dt.Rows)
-                {
-                    if (r[qtyCol] != DBNull.Value)
-                    {
-                        string strQty = r[qtyCol].ToString();
-                        if (strQty.Contains('.'))
-                            r[qtyCol] = strQty.Replace('.', ',');
-                    }
-                }
-            }
-
-            foreach (var angCol in leftAngles.Concat(rightAngles))
-            {
-                foreach (DataRow r in dt.Rows)
-                {
-                    if (r[angCol] != DBNull.Value)
-                    {
-                        string strAng = r[angCol].ToString();
-                        if (strAng.Contains('.'))
-                            r[angCol] = strAng.Replace('.', ',');
-                    }
-                }
-            }
-
-            if (vals.Any())
-            {
-                for (int i = dt.Rows.Count - 1; i >= 0; i--)
-                {
-                    if (vals.All(v => dt.Rows[i][v] == DBNull.Value || string.IsNullOrWhiteSpace(dt.Rows[i][v].ToString())))
-                        dt.Rows.RemoveAt(i);
-                }
-            }
-
-            foreach (string k in keys)
-            {
-                for (int r = 1; r < dt.Rows.Count; r++)
-                {
-                    if (string.IsNullOrWhiteSpace(dt.Rows[r][k]?.ToString()))
-                    {
-                        dt.Rows[r][k] = dt.Rows[r - 1][k];
-                        _autoFilledKeys.Add((r, k));
-                    }
-                }
-            }
-
-            dgInput.ItemsSource = dt.DefaultView;
         }
 
         public List<string> GetCheckedCols(string colType)
@@ -317,7 +264,7 @@ namespace LinearCutWpf.Controls
 
         private void OnDgInputLoadingRow(object sender, DataGridRowEventArgs e)
         {
-            if (_mainDataTable == null) return;
+            if (_dataStore.ProcessedDataTable == null) return;
             var row = e.Row;
             int rowIndex = e.Row.GetIndex();
 
@@ -330,7 +277,8 @@ namespace LinearCutWpf.Controls
                 return;
             }
 
-            foreach (var key in _autoFilledKeys)
+            // Подсвечиваем строки, где ключи были автозаполнены
+            foreach (var key in _dataStore.AutoFilledKeys)
             {
                 if (key.row == rowIndex)
                 {
@@ -342,7 +290,6 @@ namespace LinearCutWpf.Controls
 
         private void OnDgColumnConfigLoaded(object sender, RoutedEventArgs e)
         {
-            // После загрузки DataGrid обновляем цвета ячеек
             dgInput.Dispatcher.BeginInvoke(new Action(() =>
             {
                 RefreshColumnsVisuals();
@@ -351,7 +298,6 @@ namespace LinearCutWpf.Controls
 
         private void OnDgInputAutoGeneratingColumn(object sender, DataGridAutoGeneratingColumnEventArgs e)
         {
-            // Устанавливаем стиль ячеек для автоматически генерируемого столбца
             var keys = GetCheckedCols("IsKey");
             var names = GetCheckedCols("IsName");
             var vals = GetCheckedCols("IsVal");
@@ -378,7 +324,6 @@ namespace LinearCutWpf.Controls
             cellStyle.Setters.Add(new Setter(DataGridCell.BackgroundProperty, bg));
             e.Column.CellStyle = cellStyle;
 
-            // Устанавливаем стиль заголовка
             var headerStyle = new Style(typeof(DataGridColumnHeader));
             headerStyle.Setters.Add(new Setter(DataGridColumnHeader.BackgroundProperty, bg));
             e.Column.HeaderStyle = headerStyle;
@@ -386,7 +331,6 @@ namespace LinearCutWpf.Controls
 
         private void OnDgInputLoaded(object sender, RoutedEventArgs e)
         {
-            // После загрузки dgInput обновляем цвета столбцов
             dgInput.Dispatcher.BeginInvoke(new Action(() =>
             {
                 RefreshColumnsVisuals();
@@ -404,7 +348,6 @@ namespace LinearCutWpf.Controls
             var leftAngles = GetCheckedCols("IsLeftAngle");
             var rightAngles = GetCheckedCols("IsRightAngle");
 
-            // Обновляем цвета ячеек чекбоксов в dgColumnConfig
             dgColumnConfig.UpdateLayout();
             for (int i = 0; i < _columnConfigTable.Rows.Count; i++)
             {
@@ -427,7 +370,6 @@ namespace LinearCutWpf.Controls
                 SetCellBackground(dgColumnConfig, row, 6, isRightAngle ? Brushes.LightGray : Brushes.White);
             }
 
-            // Красим столбцы в dgInput через CellStyle (аналог DefaultCellStyle.BackColor в WinForms)
             foreach (var col in dgInput.Columns)
             {
                 string colName = col.Header?.ToString();
@@ -447,19 +389,15 @@ namespace LinearCutWpf.Controls
                 else
                     bg = Brushes.White;
 
-                // Создаём стиль ячеек для столбца
                 var cellStyle = new Style(typeof(DataGridCell));
                 cellStyle.Setters.Add(new Setter(DataGridCell.BackgroundProperty, bg));
                 
-                // Принудительно обновляем стиль (сначала null, потом новый)
                 col.CellStyle = null;
                 col.CellStyle = cellStyle;
 
-                // Обновляем цвет заголовка
                 col.HeaderStyle = CreateColumnHeaderStyle(bg);
             }
 
-            // Принудительно обновляем визуальное дерево DataGrid
             dgInput.UpdateLayout();
             dgInput.InvalidateVisual();
             dgInput.Items.Refresh();
@@ -469,18 +407,15 @@ namespace LinearCutWpf.Controls
         {
             if (row == null || columnIndex < 0 || columnIndex >= dataGrid.Columns.Count) return;
 
-            // Принудительно обновляем layout строки
             row.UpdateLayout();
 
             var presenter = FindVisualChild<DataGridCellsPresenter>(row);
             if (presenter == null) return;
 
-            // Обновляем layout презентера
             presenter.UpdateLayout();
 
             var cell = presenter.ItemContainerGenerator.ContainerFromIndex(columnIndex) as DataGridCell;
             
-            // Если ячейка не найдена, пробуем найти через перебор всех ячеек
             if (cell == null)
             {
                 for (int i = 0; i < VisualTreeHelper.GetChildrenCount(presenter); i++)
@@ -488,7 +423,6 @@ namespace LinearCutWpf.Controls
                     var child = VisualTreeHelper.GetChild(presenter, i);
                     if (child is DataGridCell dataGridCell)
                     {
-                        // Проверяем, соответствует ли ячейка нужному столбцу
                         if (dataGridCell.Column == dataGrid.Columns[columnIndex])
                         {
                             cell = dataGridCell;
@@ -755,19 +689,9 @@ namespace LinearCutWpf.Controls
             }
         }
 
-        /// <summary>
-        /// Восстанавливает состояние контрола на основе переданных параметров (например, при переключении между вкладками).
-        /// </summary>
-        /// <param name="mainDataTable">Таблица с данными.</param>
-        /// <param name="defaultBarLength">Длина хлыста по умолчанию.</param>
-        /// <param name="defaultPreset">Пресет по умолчанию.</param>
-        /// <param name="stockLengths">Список доступных хлыстов.</param>
-        /// <param name="presets">Список доступных пресетов.</param>
-        /// <param name="columnConfig">Таблица с конфигурацией столбцов.</param>
         public void LoadSettings(DataTable mainDataTable, double defaultBarLength, PresetModel defaultPreset,
             List<StockLengthModel> stockLengths, List<PresetModel> presets, DataTable columnConfig)
         {
-            _mainDataTable = mainDataTable;
             _defaultBarLength = defaultBarLength;
             _defaultPreset = defaultPreset;
             _stockLengths = stockLengths;
@@ -791,11 +715,16 @@ namespace LinearCutWpf.Controls
                 _columnConfigTable = columnConfig;
                 dgColumnConfig.ItemsSource = _columnConfigTable.DefaultView;
 
-                // Подписываемся на изменения данных в DataTable для обновления цветов и логики "радиокнопок"
                 _columnConfigTable.ColumnChanged -= OnColumnConfigChanged;
                 _columnConfigTable.ColumnChanged += OnColumnConfigChanged;
             }
-            ProcessDataLogic();
+            
+            // Обновляем обработанные данные через DataStoreService
+            if (mainDataTable != null && columnConfig != null)
+            {
+                _dataStore.Initialize(mainDataTable, columnConfig, null);
+                dgInput.ItemsSource = _dataStore.ProcessedDataTable.DefaultView;
+            }
         }
 
         private bool _isHandlingColumnChange = false;
@@ -805,7 +734,7 @@ namespace LinearCutWpf.Controls
         {
             if (_isHandlingColumnChange) return;
 
-            string[] radioCols = { "IsKey", "IsName", "IsVal", "IsQty", "IsLeftAngle", "IsRightAngle" };
+            string[] radioCols = { "IsKey", "IsName", "IsVal", "IsQty", "IsLeftAngle", "IsRightAngle", "IsColor" };
 
             if (radioCols.Contains(e.Column.ColumnName))
             {
@@ -834,20 +763,21 @@ namespace LinearCutWpf.Controls
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
                         _isUpdatePending = false;
+                        // Обновляем конфигурацию в хранилище
+                        if (_columnConfigTable != null)
+                        {
+                            _dataStore.UpdateColumnConfig(_columnConfigTable);
+                        }
                         RefreshColumnsVisuals();
-                        ProcessDataLogic();
                         SettingsChanged?.Invoke(this, EventArgs.Empty);
                     }), System.Windows.Threading.DispatcherPriority.Background);
                 }
             }
         }
 
-        /// <summary>
-        /// Валидация данных перед переходом на вкладку группировки
-        /// </summary>
         public bool ValidateData()
         {
-            if (_mainDataTable == null) return true;
+            if (_dataStore.ProcessedDataTable == null) return true;
 
             var vals = GetCheckedCols("IsVal");
             var qtys = GetCheckedCols("IsQty");
@@ -856,12 +786,12 @@ namespace LinearCutWpf.Controls
 
             _invalidRows.Clear();
             
-            DataTable errorsTable = _mainDataTable.Clone();
+            DataTable errorsTable = _dataStore.ProcessedDataTable.Clone();
             errorsTable.Columns.Add("Описание ошибки", typeof(string));
 
-            for (int i = 0; i < _mainDataTable.Rows.Count; i++)
+            for (int i = 0; i < _dataStore.ProcessedDataTable.Rows.Count; i++)
             {
-                var row = _mainDataTable.Rows[i];
+                var row = _dataStore.ProcessedDataTable.Rows[i];
                 List<string> errors = new List<string>();
 
                 foreach (var valCol in vals)
@@ -891,7 +821,7 @@ namespace LinearCutWpf.Controls
                 {
                     _invalidRows.Add(i);
                     var newRow = errorsTable.NewRow();
-                    for (int c = 0; c < _mainDataTable.Columns.Count; c++)
+                    for (int c = 0; c < _dataStore.ProcessedDataTable.Columns.Count; c++)
                     {
                         newRow[c] = row[c];
                     }
@@ -927,18 +857,10 @@ namespace LinearCutWpf.Controls
             }
         }
 
-        /// <summary>
-        /// Обновить настройки артикулов из GroupingControl
-        /// </summary>
-
         public void UpdateArticleSettings(Dictionary<string, ArticleSettings> articleSettings)
         {
-            // Здесь можно добавить логику обновления настроек артикулов
-            // Например, обновить _defaultBarLength и _defaultPreset на основе данных из GroupingControl
-            
             if (articleSettings != null && articleSettings.Count > 0)
             {
-                // Берем настройки первого артикула как дефолтные (или можно сделать логику выбора)
                 var firstSettings = articleSettings.Values.First();
                 
                 if (firstSettings.BarLength.HasValue)

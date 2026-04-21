@@ -43,9 +43,9 @@
 - **Методы:** `HasCustomSettings` - проверяет, отличается ли настройка артикула от глобальных по умолчанию.
 
 ### ArticleGroupingRow
-Строка группировки деталей по артикулу для UI (вкладка "Группировка").
-- **Свойства:** `ArticleName`, `ArticleDescription`, `TotalCount`, `TotalLength`, `SelectedBarLength`, `SelectedPreset`, `SelectedVisibleHeight`, `IsDefaultValue`, `IsManuallyChanged`.
-- **Особенности:** Реализует `INotifyPropertyChanged`. Позволяет пользователю задавать индивидуальные настройки прямо из таблицы группировки. Используется для отслеживания состояния высоты профиля (значение по умолчанию, ручное изменение).
+Строка группировки деталей по артикулу для UI (вкладка "Настройка артикулов").
+- **Свойства:** `ArticleName`, `ArticleDescription`, `TotalCount`, `TotalLength`, `SelectedBarLength`, `SelectedPreset`, `SelectedVisibleHeight`, `IsDefaultValue`, `IsManuallyChanged`, `IsBarLengthDefaultValue`, `IsPresetDefaultValue`.
+- **Особенности:** Реализует `INotifyPropertyChanged`. Позволяет пользователю задавать индивидуальные настройки прямо из таблицы. Флаги `IsDefaultValue`/`IsManuallyChanged` отслеживают состояние высоты профиля, флаги `IsBarLengthDefaultValue`/`IsPresetDefaultValue` — состояние длины хлыста и пресета.
 
 ### PartSizeAvailability
 Модель для отображения доступности размера детали (подходит ли он по длине в оставшееся место хлыста) в выпадающих списках ручного ввода.
