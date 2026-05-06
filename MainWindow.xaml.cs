@@ -209,19 +209,22 @@ namespace LinearCutWpf
             var articleSettingsControl = (ArticleSettingsControl)FindName("articleSettingsControl");
             if (articleSettingsControl != null)
             {
+                // Получаем текущие настройки перед реинициализацией, чтобы сохранить выбор пользователя в текущей сессии
+                var currentSettings = articleSettingsControl.GetSettings();
+
                 // Обновляем настройки в ArticleSettingsControl (загрузка происходит внутри Initialize)
-            articleSettingsControl.Initialize(
-                dataSettingsControl.MainDataTable,
-                dataSettingsControl.GetCheckedCols("IsKey"),
-                dataSettingsControl.GetCheckedCols("IsName"),
-                dataSettingsControl.GetCheckedCols("IsQty"),
-                dataSettingsControl.GetCheckedCols("IsVal"),
-                new ObservableCollection<StockLengthModel>(dataSettingsControl.StockLengths),
-                new ObservableCollection<PresetModel>(dataSettingsControl.Presets),
-                new System.Collections.Generic.Dictionary<string, ArticleSettings>(),
-                dataSettingsControl.DefaultBarLength,
-                dataSettingsControl.DefaultPreset
-            );
+                articleSettingsControl.Initialize(
+                    dataSettingsControl.MainDataTable,
+                    dataSettingsControl.GetCheckedCols("IsKey"),
+                    dataSettingsControl.GetCheckedCols("IsName"),
+                    dataSettingsControl.GetCheckedCols("IsQty"),
+                    dataSettingsControl.GetCheckedCols("IsVal"),
+                    new ObservableCollection<StockLengthModel>(dataSettingsControl.StockLengths),
+                    new ObservableCollection<PresetModel>(dataSettingsControl.Presets),
+                    currentSettings,
+                    dataSettingsControl.DefaultBarLength,
+                    dataSettingsControl.DefaultPreset
+                );
             }
         }
 

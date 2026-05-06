@@ -365,6 +365,7 @@ namespace LinearCutWpf.Models
         private bool _isDefaultValue;
         private bool _isManuallyChanged;
         private bool _isBarLengthDefaultValue;
+        private bool _isBarLengthManuallyChanged;
         private bool _isPresetDefaultValue;
 
         public string ArticleName
@@ -425,6 +426,12 @@ namespace LinearCutWpf.Models
         {
             get => _isBarLengthDefaultValue;
             set { _isBarLengthDefaultValue = value; OnPropertyChanged(nameof(IsBarLengthDefaultValue)); }
+        }
+
+        public bool IsBarLengthManuallyChanged
+        {
+            get => _isBarLengthManuallyChanged;
+            set { _isBarLengthManuallyChanged = value; OnPropertyChanged(nameof(IsBarLengthManuallyChanged)); }
         }
 
         public bool IsPresetDefaultValue

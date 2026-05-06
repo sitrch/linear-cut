@@ -126,19 +126,19 @@
                                       GotFocus="OnHeightCellGotFocus"
                                       LostFocus="OnHeightCellLostFocus"
                                       TextChanged="OnHeightCellTextChanged">
-                                 <TextBox.Style>
-                                     <Style TargetType="TextBox">
-                                         <Setter Property="Background" Value="White"/>
-                                         <Style.Triggers>
-                                             <DataTrigger Binding="{Binding IsDefaultValue}" Value="True">
-                                                 <Setter Property="Background" Value="#E6F3FF"/>
-                                             </DataTrigger>
-                                             <DataTrigger Binding="{Binding IsManuallyChanged}" Value="True">
-                                                 <Setter Property="Background" Value="#FFF5E6"/>
-                                             </DataTrigger>
-                                         </Style.Triggers>
-                                     </Style>
-                                 </TextBox.Style>
+                                  <TextBox.Style>
+                                      <Style TargetType="TextBox">
+                                          <Setter Property="Background" Value="White"/>
+                                          <Style.Triggers>
+                                              <DataTrigger Binding="{Binding IsDefaultValue}" Value="True">
+                                                  <Setter Property="Background" Value="#E6F3FF"/>
+                                              </DataTrigger>
+                                              <DataTrigger Binding="{Binding IsManuallyChanged}" Value="True">
+                                                  <Setter Property="Background" Value="#FFB6C1"/>
+                                              </DataTrigger>
+                                          </Style.Triggers>
+                                      </Style>
+                                  </TextBox.Style>
                              </TextBox>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
@@ -162,6 +162,9 @@
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsBarLengthDefaultValue}" Value="True">
                                                     <Setter Property="Background" Value="#E6E6E6"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsBarLengthManuallyChanged}" Value="True">
+                                                    <Setter Property="Background" Value="#FFB6C1"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

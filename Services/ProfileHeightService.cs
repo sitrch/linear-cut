@@ -29,12 +29,12 @@ namespace LinearCutWpf.Services
         private static string GetCurrentFilePath() => OverrideFilePath ?? HeightsFilePath;
 
         /// <summary>
-        /// Загружает данные о высоте профилей из XML-файла.
+        /// Загружает данные о высоте профилей и длине хлыста из XML-файла.
         /// </summary>
-        /// <returns>Словарь, где ключ - артикул, значение - кортеж (высота, является значением по умолчанию, изменено вручную).</returns>
-        public static Dictionary<string, (double? height, bool isDefaultValue, bool isManuallyChanged)> LoadProfileHeightsWithMetadata()
+        /// <returns>Словарь, где ключ - артикул, значение - кортеж (высота, является значением по умолчанию, изменено вручную, длина хлыста, длина хлыста изменена вручную).</returns>
+        public static Dictionary<string, (double? height, bool isDefaultValue, bool isManuallyChanged, double? barLength, bool isBarLengthManuallyChanged)> LoadProfileHeightsWithMetadata()
         {
-            var heights = new Dictionary<string, (double?, bool, bool)>();
+            var heights = new Dictionary<string, (double?, bool, bool, double?, bool)>();
 
             string filePath = GetCurrentFilePath();
             if (!File.Exists(filePath))
@@ -56,6 +56,8 @@ namespace LinearCutWpf.Services
                         var heightValue = profileElement.Attribute("VisibleHeight")?.Value;
                         var isDefaultValueAttr = profileElement.Attribute("IsDefaultValue");
                         var isManuallyChangedAttr = profileElement.Attribute("IsManuallyChanged");
+                        var barLengthAttr = profileElement.Attribute("BarLength");
+                        var isBarLengthManuallyChangedAttr = profileElement.Attribute("IsBarLengthManuallyChanged");
                         
                         if (!string.IsNullOrEmpty(article))
                         {
@@ -81,8 +83,27 @@ namespace LinearCutWpf.Services
                             {
                                 isManuallyChanged = parsedIsManuallyChanged;
                             }
+
+                            double? barLength = null;
+                            if (barLengthAttr != null)
+                            {
+                                if (barLengthAttr.Value == "null")
+                                {
+                                    barLength = null;
+                                }
+                                else if (double.TryParse(barLengthAttr.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out double parsedBarLength))
+                                {
+                                    barLength = parsedBarLength;
+                                }
+                            }
+
+                            bool isBarLengthManuallyChanged = false;
+                            if (isBarLengthManuallyChangedAttr != null && bool.TryParse(isBarLengthManuallyChangedAttr.Value, out bool parsedIsBarLengthManuallyChanged))
+                            {
+                                isBarLengthManuallyChanged = parsedIsBarLengthManuallyChanged;
+                            }
                             
-                            heights[article] = (height, isDefaultValue, isManuallyChanged);
+                            heights[article] = (height, isDefaultValue, isManuallyChanged, barLength, isBarLengthManuallyChanged);
                         }
                     }
                 }
@@ -107,7 +128,8 @@ namespace LinearCutWpf.Services
             {
                 // Проверяем, есть ли данные для сохранения
                 var rowsToSave = profileRows?.Where(r => !string.IsNullOrEmpty(r.ArticleName) && 
-                    (r.SelectedVisibleHeight.HasValue || r.IsDefaultValue || r.IsManuallyChanged)).ToList();
+                    (r.SelectedVisibleHeight.HasValue || r.IsDefaultValue || r.IsManuallyChanged ||
+                     r.SelectedBarLength.HasValue || r.IsBarLengthManuallyChanged)).ToList();
                 
                 string filePath = GetCurrentFilePath();
 
@@ -167,11 +189,17 @@ namespace LinearCutWpf.Services
                         var existingProfile = profilesElement.Elements("Profile")
                             .FirstOrDefault(e => e.Attribute("Article")?.Value == row.ArticleName);
 
+                        string barLengthValue = row.SelectedBarLength.HasValue && row.SelectedBarLength.Value > 0
+                            ? row.SelectedBarLength.Value.ToString(CultureInfo.InvariantCulture)
+                            : "null";
+
                         if (existingProfile != null)
                         {
                             existingProfile.SetAttributeValue("VisibleHeight", heightValue);
                             existingProfile.SetAttributeValue("IsDefaultValue", row.IsDefaultValue.ToString());
                             existingProfile.SetAttributeValue("IsManuallyChanged", row.IsManuallyChanged.ToString());
+                            existingProfile.SetAttributeValue("BarLength", barLengthValue);
+                            existingProfile.SetAttributeValue("IsBarLengthManuallyChanged", row.IsBarLengthManuallyChanged.ToString());
                         }
                         else
                         {
@@ -179,7 +207,9 @@ namespace LinearCutWpf.Services
                                 new XAttribute("Article", row.ArticleName),
                                 new XAttribute("VisibleHeight", heightValue),
                                 new XAttribute("IsDefaultValue", row.IsDefaultValue.ToString()),
-                                new XAttribute("IsManuallyChanged", row.IsManuallyChanged.ToString())));
+                                new XAttribute("IsManuallyChanged", row.IsManuallyChanged.ToString()),
+                                new XAttribute("BarLength", barLengthValue),
+                                new XAttribute("IsBarLengthManuallyChanged", row.IsBarLengthManuallyChanged.ToString())));
                         }
                     }
                 }

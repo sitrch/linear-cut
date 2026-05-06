@@ -44,8 +44,8 @@
 
 ### ArticleGroupingRow
 Строка группировки деталей по артикулу для UI (вкладка "Настройка артикулов").
-- **Свойства:** `ArticleName`, `ArticleDescription`, `TotalCount`, `TotalLength`, `SelectedBarLength`, `SelectedPreset`, `SelectedVisibleHeight`, `IsDefaultValue`, `IsManuallyChanged`, `IsBarLengthDefaultValue`, `IsPresetDefaultValue`.
-- **Особенности:** Реализует `INotifyPropertyChanged`. Позволяет пользователю задавать индивидуальные настройки прямо из таблицы. Флаги `IsDefaultValue`/`IsManuallyChanged` отслеживают состояние высоты профиля, флаги `IsBarLengthDefaultValue`/`IsPresetDefaultValue` — состояние длины хлыста и пресета.
+- **Свойства:** `ArticleName`, `ArticleDescription`, `TotalCount`, `TotalLength`, `SelectedBarLength`, `SelectedPreset`, `SelectedVisibleHeight`, `IsDefaultValue`, `IsManuallyChanged`, `IsBarLengthDefaultValue`, `IsBarLengthManuallyChanged`, `IsPresetDefaultValue`, `DisplayDefaultBarLength`, `DisplayDefaultPresetName`.
+- **Особенности:** Реализует `INotifyPropertyChanged`. Позволяет пользователю задавать индивидуальные настройки прямо из таблицы. Флаги `IsDefaultValue`/`IsManuallyChanged` отслеживают состояние высоты профиля, флаги `IsBarLengthDefaultValue`/`IsBarLengthManuallyChanged` — состояние длины хлыста, флаг `IsPresetDefaultValue` — состояние пресета.
 
 ### PartSizeAvailability
 Модель для отображения доступности размера детали (подходит ли он по длине в оставшееся место хлыста) в выпадающих списках ручного ввода.

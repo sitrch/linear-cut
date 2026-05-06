@@ -168,7 +168,18 @@ namespace LinearCutWpf.Controls
 
                 _isLoading = false;
                 if (cbSheetSelector.Items.Count > 0)
-                    cbSheetSelector.SelectedIndex = 0;
+                {
+                    int raskroyIdx = -1;
+                    for (int i = 0; i < cbSheetSelector.Items.Count; i++)
+                    {
+                        if (cbSheetSelector.Items[i].ToString() == "Раскрой")
+                        {
+                            raskroyIdx = i;
+                            break;
+                        }
+                    }
+                    cbSheetSelector.SelectedIndex = raskroyIdx >= 0 ? raskroyIdx : 0;
+                }
             }
         }
 

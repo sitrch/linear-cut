@@ -149,10 +149,12 @@ namespace LinearCutWpf.Controls
                 if (comboBox.SelectedValue is double length && length > 0)
                 {
                     row.IsBarLengthDefaultValue = false;
+                    row.IsBarLengthManuallyChanged = true;
                 }
                 else
                 {
                     row.IsBarLengthDefaultValue = true;
+                    row.IsBarLengthManuallyChanged = false;
                 }
             }
         }
@@ -287,6 +289,19 @@ namespace LinearCutWpf.Controls
                     rowModel.SelectedVisibleHeight = heightData.height;
                     rowModel.IsDefaultValue = heightData.isDefaultValue;
                     rowModel.IsManuallyChanged = heightData.isManuallyChanged;
+
+                    // Загружаем сохранённую длину хлыста
+                    if (heightData.barLength.HasValue && heightData.barLength.Value > 0)
+                    {
+                        rowModel.SelectedBarLength = heightData.barLength;
+                        rowModel.IsBarLengthDefaultValue = false;
+                        rowModel.IsBarLengthManuallyChanged = heightData.isBarLengthManuallyChanged;
+                    }
+                    else
+                    {
+                        rowModel.IsBarLengthDefaultValue = true;
+                        rowModel.IsBarLengthManuallyChanged = false;
+                    }
                 }
                 else
                 {
@@ -294,12 +309,19 @@ namespace LinearCutWpf.Controls
                     rowModel.SelectedVisibleHeight = DefaultVisibleHeight;
                     rowModel.IsDefaultValue = true;
                     rowModel.IsManuallyChanged = false;
+                    rowModel.IsBarLengthDefaultValue = true;
+                    rowModel.IsBarLengthManuallyChanged = false;
                 }
 
                 if (existingSettings != null && existingSettings.TryGetValue(articleName, out var settings))
                 {
-                    rowModel.SelectedBarLength = settings.BarLength;
-                    rowModel.IsBarLengthDefaultValue = !settings.BarLength.HasValue;
+                    // Если в existingSettings есть BarLength, он имеет приоритет (текущая сессия)
+                    if (settings.BarLength.HasValue && settings.BarLength.Value > 0)
+                    {
+                        rowModel.SelectedBarLength = settings.BarLength;
+                        rowModel.IsBarLengthDefaultValue = false;
+                        rowModel.IsBarLengthManuallyChanged = true;
+                    }
                     if (settings.Preset != null)
                     {
                         rowModel.SelectedPreset = AvailablePresets.FirstOrDefault(p => p.Name == settings.Preset.Name);
@@ -310,7 +332,7 @@ namespace LinearCutWpf.Controls
                         rowModel.IsPresetDefaultValue = true;
                     }
                 }
-                else
+                else if (!rowModel.SelectedBarLength.HasValue || rowModel.SelectedBarLength.Value == 0)
                 {
                     rowModel.IsBarLengthDefaultValue = true;
                     rowModel.IsPresetDefaultValue = true;
