@@ -1,0 +1,9 @@
+model: z-ai/glm-5.1
+openai-api-base: https://routerai.ru/v1
+openai-api-key: sk-3-zLPH_8hVsdvS9Z18yE9rvP1VGrgR_B
+# Использовать карту репозитория для экономии токенов
+map-tokens: 1024
+# Автоматически делать коммиты после каждой правки
+auto-commits: true
+# Понимать C# лучше
+attribute-author: true

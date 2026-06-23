@@ -29,6 +29,15 @@
         <DataGrid x:Name="dgExportData" Grid.Row="1" AutoGenerateColumns="False" 
                   CanUserAddRows="False" Background="White" HeadersVisibility="Column"
                   PreviewKeyDown="dgExportData_PreviewKeyDown">
+            <DataGrid.Resources>
+                <Style x:Key="ManualCutCellStyle" TargetType="TextBlock">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsManualCut}" Value="True">
+                            <Setter Property="Background" Value="#FFF8E1"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.Resources>
             <DataGrid.Columns>
                 <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="100">
                     <DataGridCheckBoxColumn.Header>
@@ -37,10 +46,11 @@
                         </StackPanel>
                     </DataGridCheckBoxColumn.Header>
                 </DataGridCheckBoxColumn>
-                <DataGridTextColumn Header="Артикул" Binding="{Binding Article}" IsReadOnly="True" Width="150"/>
-                <DataGridTextColumn Header="Наименование" Binding="{Binding Name}" IsReadOnly="True" Width="200"/>
-                <DataGridTextColumn Header="Длина хлыста" Binding="{Binding StockLength}" IsReadOnly="True" Width="100"/>
-                <DataGridTextColumn Header="Количество хлыстов" Binding="{Binding StockCount}" IsReadOnly="True" Width="130"/>
+                <DataGridTextColumn Header="Артикул" Binding="{Binding Article}" IsReadOnly="True" Width="150" ElementStyle="{StaticResource ManualCutCellStyle}"/>
+                <DataGridTextColumn Header="Наименование" Binding="{Binding Name}" IsReadOnly="True" Width="200" ElementStyle="{StaticResource ManualCutCellStyle}"/>
+                <DataGridTextColumn Header="Цвет" Binding="{Binding Color}" IsReadOnly="True" Width="120" ElementStyle="{StaticResource ManualCutCellStyle}"/>
+                <DataGridTextColumn Header="Длина хлыста" Binding="{Binding StockLength}" IsReadOnly="True" Width="100" ElementStyle="{StaticResource ManualCutCellStyle}"/>
+                <DataGridTextColumn Header="Количество хлыстов" Binding="{Binding StockCount}" IsReadOnly="True" Width="130" ElementStyle="{StaticResource ManualCutCellStyle}"/>
             </DataGrid.Columns>
         </DataGrid>
     </Grid>

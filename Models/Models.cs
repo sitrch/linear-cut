@@ -341,13 +341,32 @@ namespace LinearCutWpf.Models
     }
 
     /// <summary>
+    /// Модель частично заполненного хлыста (из ручного раскроя),
+    /// передаваемая в оптимизатор для дозаполнения автоматическими деталями.
+    /// </summary>
+    public class PreFilledBar
+    {
+        /// <summary>Полная длина хлыста (мм).</summary>
+        public double StockLength { get; set; }
+        /// <summary>Уже размещённые ручные детали (длины с учётом ширины реза).</summary>
+        public List<double> ManualParts { get; set; } = new List<double>();
+        /// <summary>Доступное место для автоматических деталей (мм), = capacity - sum(ManualParts).</summary>
+        public double FreeSpace { get; set; }
+    }
+
+    /// <summary>
     /// Детализированная модель распила хлыста (с разбивкой на отдельные детали).
     /// </summary>
     public class CutBarDetailed
     {
         public double StockLength { get; set; }
         public double Remainder { get; set; }
+        /// <summary>Детали, размещённые оптимизатором (автоматические).</summary>
         public List<PartItem> Parts { get; set; } = new List<PartItem>();
+        /// <summary>Ручные детали, уже размещённые на хлысте до оптимизации (длины без CutWidth).</summary>
+        public List<double> ManualParts { get; set; } = new List<double>();
+        /// <summary>Флаг, указывающий, что хлыст является хлыстом ручного раскроя, на который размещены детали автоматического раскроя.</summary>
+        public bool IsFromManualCut { get; set; } = false;
     }
 
     /// <summary>

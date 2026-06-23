@@ -245,7 +245,8 @@ namespace LinearCutWpf.Controls
             string valCol = valCols.FirstOrDefault();
 
             var groups = dataTable.Rows.Cast<DataRow>()
-                .GroupBy(r => DataHelper.GetArticleName(keyCols.Select(k => r[k]?.ToString())));
+                .GroupBy(r => DataHelper.GetArticleName(keyCols.Select(k => r[k]?.ToString())))
+                .OrderBy(g => g.Key, NaturalStringComparer.Instance);
 
             foreach (var group in groups)
             {

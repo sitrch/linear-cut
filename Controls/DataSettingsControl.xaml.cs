@@ -145,6 +145,8 @@ namespace LinearCutWpf.Controls
                 _currentFilePath = ofd.FileName;
                 _isLoading = true;
                 cbSheetSelector.Items.Clear();
+                _columnConfigTable = null;
+                _invalidRows.Clear();
 
                 try
                 {
@@ -233,6 +235,9 @@ namespace LinearCutWpf.Controls
                 foreach (DataColumn c in rawDataTable.Columns)
                     _columnConfigTable.Rows.Add(c.ColumnName, false, false, false, false, false, false, false);
 
+                // Автоматическое назначение ролей по заголовкам столбцов
+                AutoAssignColumnRoles(_columnConfigTable);
+
                 // Читаем данные
                 foreach (var row in ws.RowsUsed().Skip(1))
                 {
@@ -267,6 +272,70 @@ namespace LinearCutWpf.Controls
                 .Select(r => r["ColName"].ToString())
                 .ToList();
             return result;
+        }
+
+        /// <summary>
+        /// Автоматически назначает роли столбцам на основе их заголовков.
+        /// Правила: "Артикул" → IsKey, "Длина" → IsVal, "Наименование" → IsName,
+        /// "Цвет" → IsColor, содержит "лев" и "угол" → IsLeftAngle, содержит "прав" и "угол" → IsRightAngle.
+        /// Для взаимоисключающих ролей назначается только первому совпавшему столбцу.
+        /// </summary>
+        private void AutoAssignColumnRoles(DataTable columnConfig)
+        {
+            if (columnConfig == null) return;
+
+            // Отслеживаем, какие роли уже назначены (кроме IsKey, который может быть у нескольких столбцов)
+            var assignedRoles = new HashSet<string>();
+
+            foreach (DataRow row in columnConfig.Rows)
+            {
+                string colName = row["ColName"]?.ToString();
+                if (string.IsNullOrEmpty(colName)) continue;
+
+                string lower = colName.ToLowerInvariant();
+
+                // Артикул → IsKey
+                if (lower.Contains("артикул"))
+                {
+                    row["IsKey"] = true;
+                    // IsKey не добавляем в assignedRoles — может быть у нескольких столбцов
+                }
+
+                // Наименование → IsName
+                if (lower.Contains("наименование") && !assignedRoles.Contains("IsName"))
+                {
+                    row["IsName"] = true;
+                    assignedRoles.Add("IsName");
+                }
+
+                // Длина → IsVal
+                if (lower.Contains("длина") && !assignedRoles.Contains("IsVal"))
+                {
+                    row["IsVal"] = true;
+                    assignedRoles.Add("IsVal");
+                }
+
+                // Цвет → IsColor
+                if (lower.Contains("цвет") && !assignedRoles.Contains("IsColor"))
+                {
+                    row["IsColor"] = true;
+                    assignedRoles.Add("IsColor");
+                }
+
+                // Левый угол: содержит "лев" и "угол"
+                if (lower.Contains("лев") && lower.Contains("угол") && !assignedRoles.Contains("IsLeftAngle"))
+                {
+                    row["IsLeftAngle"] = true;
+                    assignedRoles.Add("IsLeftAngle");
+                }
+
+                // Правый угол: содержит "прав" и "угол"
+                if (lower.Contains("прав") && lower.Contains("угол") && !assignedRoles.Contains("IsRightAngle"))
+                {
+                    row["IsRightAngle"] = true;
+                    assignedRoles.Add("IsRightAngle");
+                }
+            }
         }
 
         private void OnDgInputLoadingRow(object sender, DataGridRowEventArgs e)
@@ -433,8 +502,8 @@ namespace LinearCutWpf.Controls
                 { "IsName", Brushes.LightPink },
                 { "IsVal", Brushes.LightYellow },
                 { "IsQty", Brushes.LightCyan },
-                { "IsLeftAngle", Brushes.LightGray },
-                { "IsRightAngle", Brushes.LightGray },
+                { "IsLeftAngle", Brushes.LightBlue },
+                { "IsRightAngle", Brushes.Lavender },
                 { "IsColor", Brushes.LightSalmon }
             };
 

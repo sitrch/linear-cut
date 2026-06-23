@@ -14,6 +14,18 @@
 
         <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="10" Background="#F0F0F0">
             <StackPanel x:Name="leftPanel">
+                <!-- Информация об артикуле -->
+                <Border x:Name="articleInfoBorder" Margin="0,0,0,10" Padding="8,6" CornerRadius="4" Background="White" BorderBrush="#CCCCCC" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="articleColorIndicator" Width="14" Height="14" Fill="Green" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="articleNameText" Text="" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="Black"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Info label (перенесён выше, чтобы не пропадал при открытии ручного раскроя) -->
+                <TextBlock x:Name="infoLabel" Margin="0,0,0,10"
+                           FontFamily="Consolas" FontSize="12" Foreground="Black" TextWrapping="Wrap"/>
+
                 <!-- Хлыст -->
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                     <TextBlock x:Name="indicatorBar" Text="✓" Foreground="Green" FontSize="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
@@ -34,11 +46,11 @@
                     <CheckBox x:Name="chkManual" Content="Ручной раскрой" FontWeight="Bold"/>
                 </StackPanel>
 
-                <!-- ManualCutControl -->
-                <Frame x:Name="manualCutFrame" Width="390" Margin="0,5,0,0"/>
+                <!-- ManualCutControl (ContentControl вместо Frame для избежания проблем с focus scope) -->
+                <ContentControl x:Name="manualCutFrame" Margin="0,5,0,0"/>
 
                 <!-- Ошибки ручного раскроя -->
-                <Border x:Name="errorsBorder" Width="390" Margin="0,5,0,0"
+                <Border x:Name="errorsBorder" Margin="0,5,0,0"
                         BorderBrush="Red" BorderThickness="1" CornerRadius="3"
                         Padding="5" Background="#FFF5F5" Visibility="Collapsed">
                     <StackPanel>
@@ -47,24 +59,36 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Info label -->
-                <TextBlock x:Name="infoLabel" Width="390" Margin="0,10,0,0"
-                           FontFamily="Consolas" FontSize="12" Foreground="Black" TextWrapping="Wrap"/>
             </StackPanel>
         </ScrollViewer>
 
         <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="LightGray" />
 
         <!-- Правая панель с деталями -->
-        <DataGrid Grid.Column="2" x:Name="gridDetails"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  Background="White">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Артикул" Binding="{Binding Article}" />
-                <DataGridTextColumn Header="Длина" Binding="{Binding Length}" />
-                <DataGridTextColumn Header="Количество" Binding="{Binding Count}" />
-            </DataGrid.Columns>
-        </DataGrid>
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <DataGrid x:Name="gridDetails"
+                      Grid.Row="0"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      SelectionMode="Extended"
+                      SelectionUnit="Cell"
+                      SelectedCellsChanged="OnSelectedCellsChanged"
+                      Background="White">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Артикул" Binding="{Binding Article}" />
+                    <DataGridTextColumn Header="Длина" Binding="{Binding Length}" />
+                    <DataGridTextColumn Header="Количество" Binding="{Binding Count}" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <Border Grid.Row="1" Background="#F0F0F0" BorderBrush="#CCCCCC" BorderThickness="0,1,0,0" Padding="8,4">
+                <TextBlock x:Name="statusBarText" Text="" FontSize="12" Foreground="Black" VerticalAlignment="Center" TextWrapping="Wrap"/>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

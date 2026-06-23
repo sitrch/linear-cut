@@ -21,6 +21,16 @@ namespace LinearCutWpf.Controls
             public string GroupKey { get; set; }
 
             /// <summary>
+            /// Возвращает или задает описание артикула (наименование и цвет).
+            /// </summary>
+            public string ArticleDescription { get; set; }
+
+            /// <summary>
+            /// Флаг, указывающий, что данный результат относится к ручному раскрою.
+            /// </summary>
+            public bool IsManualCut { get; set; }
+
+            /// <summary>
             /// Возвращает или задает таблицу с результатами раскроя для группы.
             /// </summary>
             public System.Data.DataTable ResultTable { get; set; }
@@ -71,7 +81,7 @@ namespace LinearCutWpf.Controls
             double totalStock = results.Sum(r => r.TotalStockLength);
             double totalKpd = totalStock > 0 ? (totalParts / totalStock * 100.0) : 0;
 
-            txtTotalStats.Text = $"Общая длина деталей: {totalParts / 1000:F2} м | Общая длина хлыстов: {totalStock / 1000:F2} м | Общий %Использования материала: {totalKpd:F2}%";
+            txtTotalStats.Text = $"Общая длина деталей: {totalParts / 1000:F2} м | Общая длина хлыстов: {totalStock / 1000:F2} м | Общий %ИспМат: {totalKpd:F2}%";
 
             var viewModels = results.Select(r => 
             {
@@ -79,14 +89,22 @@ namespace LinearCutWpf.Controls
                 string stocksText = "Использовано " + string.Join(",\n", stocksList);
                 if (r.UsedStocks.Count == 0) stocksText = "Использовано 0 хлыстов";
 
+                string groupKeyDisplay = $"Артикул: {r.GroupKey}";
+                if (!string.IsNullOrWhiteSpace(r.ArticleDescription))
+                    groupKeyDisplay += $"  |  {r.ArticleDescription}";
+
                 return new ResultViewModel
                 {
-                    GroupKey = $"Артикул: {r.GroupKey}",
+                    GroupKey = groupKeyDisplay,
+                    ArticleDescription = r.ArticleDescription,
+                    IsManualCut = r.IsManualCut,
                     ResultTable = r.ResultTable,
-                    StatsParts = $"Оптимизировано {r.TotalPartsCount} деталей общей длиной {r.TotalPartsLength / 1000:F2} м",
+                    StatsParts = r.IsManualCut 
+                        ? $"Раскроено вручную {r.TotalPartsCount} деталей общей длиной {r.TotalPartsLength / 1000:F2} м"
+                        : $"Оптимизировано {r.TotalPartsCount} деталей общей длиной {r.TotalPartsLength / 1000:F2} м",
                     StatsStocks = stocksText,
                     StatsRemainders = $"Общая длина остатков: {r.TotalRemainderLength / 1000:F2} м",
-                    StatsKpd = $"%Использования материала: {r.KpdPercent:F2}%"
+                    StatsKpd = $"%ИспМат: {r.MaterialUtilizationRate:F2}%"
                 };
             }).ToList();
 

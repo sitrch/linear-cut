@@ -77,10 +77,10 @@ namespace LinearCutWpf.Controls
         {
             var roles = new[]
             {
-                ("Key", "IsKey"),
+                ("Артикул", "IsKey"),
                 ("Наименование", "IsName"),
-                ("Value", "IsVal"),
-                ("Quantity", "IsQty"),
+                ("Длина", "IsVal"),
+                ("Количество", "IsQty"),
                 ("Левый угол", "IsLeftAngle"),
                 ("Правый угол", "IsRightAngle"),
                 ("Цвет", "IsColor")

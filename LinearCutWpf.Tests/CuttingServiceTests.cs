@@ -62,22 +62,11 @@ namespace LinearCutWpf.Tests
             var results = service.OptimizeAllGroups(groups, stocks, manualCuts, preset);
 
             // Assert
-            Assert.Equal(2, results.Count); // One for auto, one for manual
+            // The only auto part (500mm) fits on the remainder of the manual bar (UseRemainders),
+            // so autoPartsCount = 0 and the auto result is filtered out.
+            // The manual result includes both original manual parts (1000+1000) and the auto-placed part (500).
+            Assert.Equal(1, results.Count); // Only manual result (auto part was placed on manual bar remainder)
             var result = results.First();
-
-            // Total parts length should be 1000 * 2 + 500 = 2500
-            
-            // Assert using the new VerifyOptimization function
-            
-            // Note: VerifyOptimization will fail for input vs output because input is just GroupData (table with 1000*2 + 500*1 = 2500),
-            // but output includes the manual cuts (1000*2 = 2000 from manual cut + whatever is in GroupData table) if they were not removed.
-            // Oh wait, manual parts are matched and removed from group data pts list.
-            // GroupData: 1000*2 + 500*1 = 2500, 3 parts.
-            // ManualCuts: 1000*2 = 2000.
-            // ManualParts removed from pts list: 1000*2. Remaining for auto: 500.
-            // Auto result: 500. Count: 1.
-            // Manual result: 1000, 1000. Count: 2. Length: 2000.
-            // Total results output: Count 3, Length 2500. Matches input!
 
             bool isVerified = service.VerifyOptimization(groups, results);
             Assert.True(isVerified, "The optimization results do not match the input group data in count or length.");

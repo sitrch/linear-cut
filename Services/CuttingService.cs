@@ -28,13 +28,19 @@ namespace LinearCutWpf.Services
         public class OptimizationResult
         {
             public string GroupKey { get; set; }
+            /// <summary>Описание артикула (наименование и цвет из данных).</summary>
+            public string ArticleDescription { get; set; }
+            /// <summary>Флаг, указывающий, что данный результат относится к ручному раскрою.</summary>
+            public bool IsManualCut { get; set; }
+            /// <summary>Исходный ключ артикула (без префикса "Ручной раскрой"), используется для поиска наименования.</summary>
+            public string OriginalGroupKey { get; set; }
             public DataTable ResultTable { get; set; } = new DataTable();
             public double TotalPartsLength { get; set; }
             public double TotalStockLength { get; set; }
             public int TotalPartsCount { get; set; }
             public double TotalRemainderLength { get; set; }
             public Dictionary<double, int> UsedStocks { get; set; } = new Dictionary<double, int>();
-            public double KpdPercent => TotalStockLength > 0 ? (TotalPartsLength / TotalStockLength * 100.0) : 0;
+            public double MaterialUtilizationRate => TotalStockLength > 0 ? (TotalPartsLength / TotalStockLength * 100.0) : 0;
             public List<CutBarDetailed> DetailedBars { get; set; } = new List<CutBarDetailed>();
         }
 
@@ -102,6 +108,148 @@ namespace LinearCutWpf.Services
         }
 
         /// <summary>
+        /// Проверяет целостность результатов после перемещения хлыстов ручного раскроя.
+        /// Возвращает список ошибок (пустой список = всё в порядке).
+        /// </summary>
+        /// <param name="results">Список результатов оптимизации.</param>
+        /// <param name="groups">Входные данные групп.</param>
+        /// <param name="cutWidth">Ширина реза для нормализации длин деталей.</param>
+        /// <returns>Список строк с описанием найденных ошибок.</returns>
+        public List<string> VerifyManualBarsIntegrity(List<OptimizationResult> results, IEnumerable<GroupData> groups, double cutWidth)
+        {
+            var errors = new List<string>();
+
+            // 1. Ни один хлыст с IsFromManualCut=true не должен остаться в автоматических результатах
+            foreach (var result in results.Where(r => !r.IsManualCut))
+            {
+                if (result.DetailedBars != null)
+                {
+                    foreach (var bar in result.DetailedBars)
+                    {
+                        if (bar.IsFromManualCut)
+                        {
+                            errors.Add($"Артикул '{result.GroupKey}': хлыст StockLength={bar.StockLength} с IsFromManualCut=true не должен быть в автоматическом результате.");
+                        }
+                    }
+                }
+            }
+
+            // 2. В ручном результате: ManualParts у хлыстов с IsFromManualCut должен быть заполнен
+            var manualResult = results.FirstOrDefault(r => r.IsManualCut);
+            if (manualResult?.DetailedBars != null)
+            {
+                foreach (var bar in manualResult.DetailedBars.Where(b => b.IsFromManualCut))
+                {
+                    if (bar.ManualParts == null || bar.ManualParts.Count == 0)
+                    {
+                        errors.Add($"Хлыст StockLength={bar.StockLength}: ManualParts пуст, хотя хлыст из ручного раскроя.");
+                    }
+                }
+            }
+
+            // 3. Статистика ручного результата: TotalPartsCount и TotalPartsLength должны быть > 0
+            if (manualResult != null)
+            {
+                if (manualResult.TotalPartsCount <= 0)
+                {
+                    errors.Add("Ручной результат: TotalPartsCount = 0, хотя ручной раскрой существует.");
+                }
+                if (manualResult.TotalPartsLength <= 0)
+                {
+                    errors.Add("Ручной результат: TotalPartsLength = 0, хотя ручной раскрой существует.");
+                }
+            }
+
+            // 4. Проверка: сумма количеств деталей определённой длины в ручном + автоматическом = входные данные
+            var inputCounts = new Dictionary<double, int>();
+            foreach (var group in groups ?? Enumerable.Empty<GroupData>())
+            {
+                var groupDt = group?.Table;
+                if (groupDt == null) continue;
+
+                foreach (DataRow row in groupDt.Rows)
+                {
+                    var valObj = row[group.ValueColumnName];
+                    var qtyObj = string.IsNullOrEmpty(group.QtyColumnName) ? null : row[group.QtyColumnName];
+
+                    double l = (valObj == null || valObj == DBNull.Value) ? 0 : Convert.ToDouble(valObj);
+                    if (l <= 0) continue;
+
+                    int count;
+                    if (qtyObj == null || qtyObj == DBNull.Value || string.IsNullOrWhiteSpace(qtyObj.ToString()))
+                        count = string.IsNullOrEmpty(group.QtyColumnName) ? 1 : 0;
+                    else
+                        count = Convert.ToInt32(qtyObj);
+
+                    if (count <= 0) continue;
+
+                    if (inputCounts.ContainsKey(l))
+                        inputCounts[l] += count;
+                    else
+                        inputCounts[l] = count;
+                }
+            }
+
+            // Собираем количества из автоматических результатов
+            var outputCounts = new Dictionary<double, int>();
+            foreach (var result in results.Where(r => !r.IsManualCut))
+            {
+                if (result.DetailedBars != null)
+                {
+                    foreach (var bar in result.DetailedBars)
+                    {
+                        foreach (var part in bar.Parts)
+                        {
+                            double rawLen = part.Length - cutWidth;
+                            if (outputCounts.ContainsKey(rawLen))
+                                outputCounts[rawLen]++;
+                            else
+                                outputCounts[rawLen] = 1;
+                        }
+                    }
+                }
+            }
+
+            // Собираем количества из ручного результата
+            if (manualResult?.ResultTable != null)
+            {
+                foreach (DataRow row in manualResult.ResultTable.Rows)
+                {
+                    var partsStr = row["Раскрой"]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(partsStr))
+                    {
+                        foreach (var part in partsStr.Split(new[] { " + " }, StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            if (double.TryParse(part, System.Globalization.NumberStyles.Any,
+                                System.Globalization.CultureInfo.InvariantCulture, out double len))
+                            {
+                                if (outputCounts.ContainsKey(len))
+                                    outputCounts[len]++;
+                                else
+                                    outputCounts[len] = 1;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Сравниваем: для каждой длины входное количество должно совпадать с выходным
+            foreach (var kvp in inputCounts)
+            {
+                double length = kvp.Key;
+                int inputCount = kvp.Value;
+                int outputCount = outputCounts.TryGetValue(length, out int c) ? c : 0;
+
+                if (inputCount != outputCount)
+                {
+                    errors.Add($"Деталь длиной {length} мм: на входе {inputCount} шт, в раскрое (авто+ручной) {outputCount} шт.");
+                }
+            }
+
+            return errors;
+        }
+
+        /// <summary>
         /// Проверяет, совпадает ли общее количество и длина деталей на входе (groups)
         /// с количеством и длиной деталей, размещенных в результате раскроя (results).
         /// </summary>
@@ -126,7 +274,11 @@ namespace LinearCutWpf.Services
                     double l = (valObj == null || valObj == DBNull.Value) ? 0 : Convert.ToDouble(valObj);
                     if (l <= 0) continue;
 
-                    int count = (qtyObj == null || qtyObj == DBNull.Value || string.IsNullOrWhiteSpace(qtyObj.ToString())) ? 1 : Convert.ToInt32(qtyObj);
+                    int count;
+                    if (qtyObj == null || qtyObj == DBNull.Value || string.IsNullOrWhiteSpace(qtyObj.ToString()))
+                        count = string.IsNullOrEmpty(group.QtyColumnName) ? 1 : 0;
+                    else
+                        count = Convert.ToInt32(qtyObj);
                     
                     inputCount += count;
                     inputLength += l * count;
@@ -159,9 +311,9 @@ namespace LinearCutWpf.Services
 
             var manualParts = BuildManualParts(manualCuts, preset);
             var enabledStocks = stocks?.Where(x => x.IsEnabled).Select(x => x.Length).ToList() ?? new List<double>();
-            var finiteStocks = new List<double>();
+            var preFilledBars = new List<PreFilledBar>();
             
-            // Расчет остатков из ручного раскроя
+            // Расчет частично заполненных хлыстов из ручного раскроя
             if (manualCuts != null)
             {
                 double reduction = (preset.TrimStart - preset.CutWidth / 2) + (preset.TrimEnd - preset.CutWidth / 2);
@@ -170,31 +322,36 @@ namespace LinearCutWpf.Services
                     if (mr.UseRemainders && mr.BarLength.HasValue && mr.BarLength.Value > 0)
                     {
                         double capacity = mr.BarLength.Value - reduction;
+                        var manualBarParts = new List<double>();
                         double used = 0;
                         int count = mr.Count > 0 ? mr.Count : 1;
 
-                        if (double.TryParse(mr.Size1, out var s1) && s1 > 0) used += s1 + preset.CutWidth;
-                        if (double.TryParse(mr.Size2, out var s2) && s2 > 0) used += s2 + preset.CutWidth;
-                        if (double.TryParse(mr.Size3, out var s3) && s3 > 0) used += s3 + preset.CutWidth;
-                        if (double.TryParse(mr.Size4, out var s4) && s4 > 0) used += s4 + preset.CutWidth;
+                        if (double.TryParse(mr.Size1, out var s1) && s1 > 0) { manualBarParts.Add(s1); used += s1 + preset.CutWidth; }
+                        if (double.TryParse(mr.Size2, out var s2) && s2 > 0) { manualBarParts.Add(s2); used += s2 + preset.CutWidth; }
+                        if (double.TryParse(mr.Size3, out var s3) && s3 > 0) { manualBarParts.Add(s3); used += s3 + preset.CutWidth; }
+                        if (double.TryParse(mr.Size4, out var s4) && s4 > 0) { manualBarParts.Add(s4); used += s4 + preset.CutWidth; }
 
-                        double remainder = capacity - used;
-                        if (remainder > 0)
+                        double freeSpace = capacity - used;
+                        if (freeSpace > 0)
                         {
                             for (int i = 0; i < count; i++)
                             {
-                                finiteStocks.Add(remainder);
+                                preFilledBars.Add(new PreFilledBar
+                                {
+                                    StockLength = mr.BarLength.Value,
+                                    ManualParts = new List<double>(manualBarParts),
+                                    FreeSpace = freeSpace
+                                });
                             }
                         }
                     }
                 }
                 
-                // Сортируем по убыванию, чтобы большие остатки использовались в первую очередь
                 enabledStocks = enabledStocks.OrderByDescending(s => s).ToList();
-                finiteStocks = finiteStocks.OrderByDescending(s => s).ToList();
             }
 
             var results = new List<OptimizationResult>();
+            var allManualBarsFromAuto = new List<CutBarDetailed>();
 
             foreach (var group in groups ?? Enumerable.Empty<GroupData>())
             {
@@ -222,11 +379,15 @@ namespace LinearCutWpf.Services
                     }
 
                     double lWithCut = l + preset.CutWidth;
-                    int count = (qtyObj == null || qtyObj == DBNull.Value || string.IsNullOrWhiteSpace(qtyObj.ToString())) ? 1 : Convert.ToInt32(qtyObj);
+                    int count;
+                    if (qtyObj == null || qtyObj == DBNull.Value || string.IsNullOrWhiteSpace(qtyObj.ToString()))
+                        count = string.IsNullOrEmpty(group.QtyColumnName) ? 1 : 0;
+                    else
+                        count = Convert.ToInt32(qtyObj);
 
                     for (int i = 0; i < count; i++)
                     {
-                        var mIdx = manualParts.FindIndex(mp => Math.Abs(mp - lWithCut) < 0.1);
+                        var mIdx = manualParts.FindIndex(mp => mp == lWithCut);
                         if (mIdx >= 0)
                         {
                             manualParts.RemoveAt(mIdx);
@@ -246,19 +407,24 @@ namespace LinearCutWpf.Services
                     originalRowIndex++;
                 }
 
-                var detailedBars = CutOptimizer.Optimize(pts, enabledStocks, finiteStocks, preset.TrimStart, preset.TrimEnd, preset.CutWidth);
+                var detailedBars = CutOptimizer.Optimize(pts, enabledStocks, preFilledBars, preset.TrimStart, preset.TrimEnd, preset.CutWidth);
 
-                // Конвертируем обратно в обычные CutBar для обратной совместимости таблицы
-                var cutBars = detailedBars.Select(db => new CutBar
+                // Разделяем хлысты: автоматические и хлысты-остатки ручного раскроя (IsFromManualCut)
+                var autoDetailedBars = detailedBars.Where(db => !db.IsFromManualCut).ToList();
+                var manualBarsFromAuto = detailedBars.Where(db => db.IsFromManualCut).ToList();
+                allManualBarsFromAuto.AddRange(manualBarsFromAuto);
+
+                // Пересчитываем totP только для автоматических деталей
+                double autoTotP = autoDetailedBars.Sum(db => db.Parts.Sum(p => p.Length - preset.CutWidth));
+                int autoPartsCount = autoDetailedBars.Sum(db => db.Parts.Count);
+
+                // Конвертируем обратно в обычные CutBar (только автоматические)
+                var cutBars = autoDetailedBars.Select(db => new CutBar
                 {
                     StockLength = db.StockLength,
                     Parts = string.Join(" + ", db.Parts.Select(p => p.Length - preset.CutWidth)),
                     Remainder = db.Remainder
                 }).ToList();
-
-                // Update finiteStocks removing used remainders (approximate tracking, exact matching might need CutOptimizer changes, but CutOptimizer handles it internally during a single Optimize call. 
-                // Note: If there are multiple groups, finiteStocks are reused across groups currently. Let's assume manual cuts are per-group, so this is correct. Wait, manual cuts are per article (group).
-                // OptimizeAllGroups processes one group at a time in MainWindow, but here it's an IEnumerable<GroupData>. In MainWindow, groupList contains 1 group.
 
                 var usedStocks = new Dictionary<double, int>();
                 foreach (var cb in cutBars)
@@ -268,43 +434,85 @@ namespace LinearCutWpf.Services
                     usedStocks[cb.StockLength]++;
                 }
 
-                results.Add(new OptimizationResult
+                if (autoPartsCount > 0)
                 {
-                    GroupKey = groupKey,
-                    TotalPartsLength = totP,
-                    TotalPartsCount = pts.Count,
-                    TotalStockLength = cutBars.Sum(r => r.StockLength),
-                    TotalRemainderLength = cutBars.Sum(r => r.Remainder),
-                    UsedStocks = usedStocks,
-                    ResultTable = BuildResultTable(cutBars),
-                    DetailedBars = detailedBars
-                });
+                    results.Add(new OptimizationResult
+                    {
+                        GroupKey = groupKey,
+                        TotalPartsLength = autoTotP,
+                        TotalPartsCount = autoPartsCount,
+                        TotalStockLength = cutBars.Sum(r => r.StockLength),
+                        TotalRemainderLength = cutBars.Sum(r => r.Remainder),
+                        UsedStocks = usedStocks,
+                        ResultTable = BuildResultTable(cutBars),
+                        DetailedBars = autoDetailedBars
+                    });
+                }
             }
 
             if (manualCuts != null && manualCuts.Any())
             {
                 var manualCutBars = BuildManualCutBars(manualCuts, preset);
-                if (manualCutBars.Any())
+                if (manualCutBars.Any() || allManualBarsFromAuto.Any())
                 {
+                    // Заменяем ручные хлысты их «улучшенными» версиями (ручные + автоматические детали)
+                    var allManualBars = new List<CutBar>(manualCutBars);
+                    foreach (var autoBar in allManualBarsFromAuto)
+                    {
+                        // Объединяем ручные детали + автоматически размещённые
+                        var allParts = (autoBar.ManualParts ?? new List<double>())
+                            .Concat(autoBar.Parts.Select(p => p.Length - preset.CutWidth))
+                            .ToList();
+
+                        var upgradedBar = new CutBar
+                        {
+                            StockLength = autoBar.StockLength,
+                            Parts = string.Join(" + ", allParts),
+                            Remainder = autoBar.Remainder
+                        };
+
+                        // Ищем оригинальный ручной хлыст по совпадению StockLength и только ручных деталей
+                        var manualPartsStr = autoBar.ManualParts != null ? string.Join(" + ", autoBar.ManualParts) : "";
+                        var matchIdx = allManualBars.FindIndex(mb => mb.StockLength == autoBar.StockLength && mb.Parts == manualPartsStr);
+                        if (matchIdx >= 0)
+                            allManualBars[matchIdx] = upgradedBar; // Заменяем
+                        else
+                            allManualBars.Add(upgradedBar); // Не нашли — добавляем
+                    }
+
                     var manualUsedStocks = new Dictionary<double, int>();
-                    foreach (var cb in manualCutBars)
+                    foreach (var cb in allManualBars)
                     {
                         if (!manualUsedStocks.ContainsKey(cb.StockLength))
                             manualUsedStocks[cb.StockLength] = 0;
                         manualUsedStocks[cb.StockLength]++;
                     }
-                    
+
                     var manualGroupKey = groups?.FirstOrDefault()?.GroupKey ?? "Неизвестный артикул";
+
+                    // Статистика: все детали на ручных хлыстах (ручные + автоматически размещённые)
+                    double manualPartsLength = 0;
+                    int manualPartsCount = 0;
+                    foreach (var bar in allManualBars)
+                    {
+                        var partsArr = bar.Parts.Split(new[] { " + " }, StringSplitOptions.RemoveEmptyEntries);
+                        manualPartsCount += partsArr.Length;
+                        foreach (var p in partsArr)
+                            manualPartsLength += double.Parse(p);
+                    }
 
                     results.Add(new OptimizationResult
                     {
-                        GroupKey = $"Ручной раскрой ({manualGroupKey})",
-                        TotalPartsLength = manualCutBars.Sum(b => b.Parts.Split(new[] { " + " }, StringSplitOptions.RemoveEmptyEntries).Sum(p => double.Parse(p))),
-                        TotalPartsCount = manualCutBars.Sum(b => b.Parts.Split(new[] { " + " }, StringSplitOptions.RemoveEmptyEntries).Length),
-                        TotalStockLength = manualCutBars.Sum(r => r.StockLength),
-                        TotalRemainderLength = manualCutBars.Sum(r => r.Remainder),
+                        GroupKey = $"{manualGroupKey} (Ручной раскрой)",
+                        IsManualCut = true,
+                        OriginalGroupKey = manualGroupKey,
+                        TotalPartsLength = manualPartsLength,
+                        TotalPartsCount = manualPartsCount,
+                        TotalStockLength = allManualBars.Sum(r => r.StockLength),
+                        TotalRemainderLength = allManualBars.Sum(r => r.Remainder),
                         UsedStocks = manualUsedStocks,
-                        ResultTable = BuildResultTable(manualCutBars)
+                        ResultTable = BuildResultTable(allManualBars),
+                        DetailedBars = allManualBarsFromAuto
                     });
                 }
             }

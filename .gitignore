@@ -7,3 +7,6 @@ LinearCutWpf.Tests/obj/
 
 # Ignore logs
 debug_log.txt
+
+# CodeIndexMcp data
+.codeindex/

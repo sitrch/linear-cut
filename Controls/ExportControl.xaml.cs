@@ -33,8 +33,12 @@ namespace LinearCutWpf.Controls
 
             public string Article { get; set; }
             public string Name { get; set; }
+            /// <summary>Цвет артикула из исходных данных.</summary>
+            public string Color { get; set; }
             public double StockLength { get; set; }
             public int StockCount { get; set; }
+            /// <summary>Флаг, указывающий, что данный результат относится к ручному раскрою.</summary>
+            public bool IsManualCut { get; set; }
             
             // Ссылка на результаты для выгрузки
             public CuttingService.OptimizationResult ResultData { get; set; }
@@ -73,6 +77,7 @@ namespace LinearCutWpf.Controls
 
         private string _leftAngleColumnName;
         private string _rightAngleColumnName;
+        private string _colorColumnName;
         private string _objectName;
 
         /// <summary>
@@ -87,7 +92,8 @@ namespace LinearCutWpf.Controls
         /// <param name="objectName">Название объекта (опционально).</param>
         /// <param name="leftAngleColumnName">Имя колонки с левым углом реза (опционально).</param>
         /// <param name="rightAngleColumnName">Имя колонки с правым углом реза (опционально).</param>
-        public void LoadData(List<CuttingService.OptimizationResult> results, System.Data.DataTable originalData, List<string> keyColumnNames, string nameColumnName, string valColumnName, string qtyColumnName, string objectName = null, string leftAngleColumnName = null, string rightAngleColumnName = null)
+        /// <param name="colorColumnName">Имя колонки с цветом артикула (опционально).</param>
+        public void LoadData(List<CuttingService.OptimizationResult> results, System.Data.DataTable originalData, List<string> keyColumnNames, string nameColumnName, string valColumnName, string qtyColumnName, string objectName = null, string leftAngleColumnName = null, string rightAngleColumnName = null, string colorColumnName = null)
         {
             _originalData = originalData;
             _keyColumnNames = keyColumnNames;
@@ -96,6 +102,7 @@ namespace LinearCutWpf.Controls
             _qtyColumnName = qtyColumnName;
             _leftAngleColumnName = leftAngleColumnName;
             _rightAngleColumnName = rightAngleColumnName;
+            _colorColumnName = colorColumnName;
             _objectName = objectName;
             _exportData.Clear();
 
@@ -124,16 +131,26 @@ namespace LinearCutWpf.Controls
             foreach (var result in results)
             {
                 // Ищем наименование в исходной таблице
+                // Для ручного раскроя используем OriginalGroupKey, т.к. GroupKey содержит суффикс "(Ручной раскрой)"
+                string searchKey = result.IsManualCut ? result.OriginalGroupKey : result.GroupKey;
                 string articleName = "";
-                if (originalData != null && _keyColumnNames != null && _keyColumnNames.Any() && !string.IsNullOrEmpty(nameColumnName))
+                string articleColor = "";
+                if (originalData != null && _keyColumnNames != null && _keyColumnNames.Any())
                 {
                     // Ищем первую строку с таким артикулом
                     foreach (System.Data.DataRow row in originalData.Rows)
                     {
                         var rowKey = DataHelper.GetArticleName(_keyColumnNames.Select(k => row[k]?.ToString()));
-                        if (rowKey == result.GroupKey)
+                        if (rowKey == searchKey)
                         {
-                            articleName = row[nameColumnName]?.ToString() ?? "";
+                            if (!string.IsNullOrEmpty(nameColumnName))
+                                articleName = row[nameColumnName]?.ToString() ?? "";
+                            if (!string.IsNullOrEmpty(colorColumnName) && row.Table.Columns.Contains(colorColumnName))
+                            {
+                                var colorVal = row[colorColumnName];
+                                if (colorVal != DBNull.Value && !string.IsNullOrWhiteSpace(colorVal?.ToString()))
+                                    articleColor = colorVal.ToString();
+                            }
                             break;
                         }
                     }
@@ -153,6 +170,8 @@ namespace LinearCutWpf.Controls
                     IsSelected = true,
                     Article = result.GroupKey,
                     Name = articleName,
+                    Color = articleColor,
+                    IsManualCut = result.IsManualCut,
                     StockLength = mainStockLength,
                     StockCount = totalStockCount,
                     ResultData = result
@@ -210,24 +229,27 @@ namespace LinearCutWpf.Controls
                         if (!string.IsNullOrEmpty(_objectName))
                         {
                             summarySheet.Cell(summaryRow, 1).Value = $"Объект: {_objectName}";
-                            summarySheet.Range(summaryRow, 1, summaryRow, 4).Merge().Style.Font.Bold = true;
+                            summarySheet.Range(summaryRow, 1, summaryRow, 7).Merge().Style.Font.Bold = true;
                             summaryRow++;
                         }
                         summarySheet.Cell(summaryRow, 1).Value = $"Дата формирования: {DateTime.Now:dd.MM.yyyy HH:mm}";
-                        summarySheet.Range(summaryRow, 1, summaryRow, 4).Merge().Style.Font.Bold = true;
+                        summarySheet.Range(summaryRow, 1, summaryRow, 7).Merge().Style.Font.Bold = true;
                         summaryRow++;
                         summaryRow++; // Пустая строка
 
                         // Общая сводная таблица
                         summarySheet.Cell(summaryRow, 1).Value = "Сводная таблица раскроя";
-                        summarySheet.Range(summaryRow, 1, summaryRow, 4).Merge().Style.Font.Bold = true;
+                        summarySheet.Range(summaryRow, 1, summaryRow, 7).Merge().Style.Font.Bold = true;
                         summaryRow++;
 
                         summarySheet.Cell(summaryRow, 1).Value = "Артикул";
-                        summarySheet.Cell(summaryRow, 2).Value = "Хлыст";
-                        summarySheet.Cell(summaryRow, 3).Value = "Кол-во";
-                        summarySheet.Cell(summaryRow, 4).Value = "%Использования материала";
-                        var summaryHeaderRange = summarySheet.Range(summaryRow, 1, summaryRow, 4);
+                        summarySheet.Cell(summaryRow, 2).Value = "Наименование";
+                        summarySheet.Cell(summaryRow, 3).Value = "Цвет";
+                        summarySheet.Cell(summaryRow, 4).Value = "Хлыст";
+                        summarySheet.Cell(summaryRow, 5).Value = "Кол-во";
+                        summarySheet.Cell(summaryRow, 6).Value = "Длина (м)";
+                        summarySheet.Cell(summaryRow, 7).Value = "%ИспМат";
+                        var summaryHeaderRange = summarySheet.Range(summaryRow, 1, summaryRow, 7);
                         summaryHeaderRange.Style.Font.Bold = true;
                         summaryHeaderRange.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
                         summaryRow++;
@@ -240,9 +262,12 @@ namespace LinearCutWpf.Controls
                                 foreach (var stock in result.UsedStocks)
                                 {
                                     summarySheet.Cell(summaryRow, 1).Value = row.Article;
-                                    summarySheet.Cell(summaryRow, 2).Value = stock.Key;
-                                    summarySheet.Cell(summaryRow, 3).Value = stock.Value;
-                                    summarySheet.Cell(summaryRow, 4).Value = Math.Round(result.KpdPercent, 2);
+                                    summarySheet.Cell(summaryRow, 2).Value = row.Name;
+                                    summarySheet.Cell(summaryRow, 3).Value = row.Color;
+                                    summarySheet.Cell(summaryRow, 4).Value = stock.Key;
+                                    summarySheet.Cell(summaryRow, 5).Value = stock.Value;
+                                    summarySheet.Cell(summaryRow, 6).Value = Math.Round(stock.Key * stock.Value / 1000.0, 2);
+                                    summarySheet.Cell(summaryRow, 7).Value = Math.Round(result.MaterialUtilizationRate, 2);
                                     summaryRow++;
                                 }
                             }
@@ -289,11 +314,11 @@ namespace LinearCutWpf.Controls
                         summarySheet.Cell(summaryRow, 2).Value = (totalRemainderLength / 1000).ToString("F2") + " м";
                         summaryRow++;
 
-                        summarySheet.Cell(summaryRow, 1).Value = "%Использования материала:";
+                        summarySheet.Cell(summaryRow, 1).Value = "%ИспМат:";
                         summarySheet.Cell(summaryRow, 2).Value = Math.Round(overallKpd, 2).ToString("F2") + "%";
                         summaryRow++;
 
-                        summarySheet.Range(statStartRow, 1, summaryRow - 1, 4).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#F8F8F8");
+                        summarySheet.Range(statStartRow, 1, summaryRow - 1, 7).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#F8F8F8");
 
                         if (detailSheet != null)
                         {
@@ -322,9 +347,10 @@ namespace LinearCutWpf.Controls
                             }
 
                             // Заголовок артикула
-                            detailSheet.Cell(detailRow, 1).Value = $"Артикул: {row.Article}";
-                            detailSheet.Cell(detailRow, 2).Value = $"Наименование: {row.Name}";
-                            detailSheet.Range(detailRow, 1, detailRow, 4).Style.Font.Bold = true;
+                            var articleHeaderText = $"Артикул: {row.Article} | {row.Name}";
+                            if (!string.IsNullOrEmpty(row.Color)) articleHeaderText += $" | {row.Color}";
+                            detailSheet.Cell(detailRow, 1).Value = articleHeaderText;
+                            detailSheet.Range(detailRow, 1, detailRow, 4).Merge().Style.Font.Bold = true;
                             detailSheet.Range(detailRow, 1, detailRow, 4).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.AliceBlue;
                             detailRow++;
 
@@ -369,8 +395,8 @@ namespace LinearCutWpf.Controls
                             detailSheet.Cell(detailRow, 2).Value = (result.TotalRemainderLength / 1000).ToString("F2") + " м";
                             detailRow++;
 
-                            detailSheet.Cell(detailRow, 1).Value = "%Использования материала:";
-                            detailSheet.Cell(detailRow, 2).Value = Math.Round(result.KpdPercent, 2).ToString("F2") + "%";
+                            detailSheet.Cell(detailRow, 1).Value = "%ИспМат:";
+                            detailSheet.Cell(detailRow, 2).Value = Math.Round(result.MaterialUtilizationRate, 2).ToString("F2") + "%";
                             detailRow++;
 
                             detailSheet.Range(statsStartRow, 1, detailRow - 1, 4).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#F8F8F8");
@@ -494,20 +520,26 @@ namespace LinearCutWpf.Controls
                     
                     column.Item().Table(table =>
                     {
-                        table.ColumnsDefinition(columns =>
-                        {
-                            columns.RelativeColumn();
-                            columns.RelativeColumn();
-                            columns.RelativeColumn();
-                            columns.RelativeColumn();
-                        });
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn();
+                        columns.RelativeColumn();
+                        columns.RelativeColumn();
+                        columns.RelativeColumn();
+                        columns.RelativeColumn();
+                        columns.RelativeColumn();
+                        columns.RelativeColumn();
+                    });
 
                         table.Header(header =>
                         {
                             header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Артикул").SemiBold();
+                            header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Наименование").SemiBold();
+                            header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Цвет").SemiBold();
                             header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Хлыст").SemiBold();
                             header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Кол-во").SemiBold();
-                            header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("%Использования материала").SemiBold();
+                            header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Длина (м)").SemiBold();
+                            header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("%Использования").SemiBold();
                         });
 
                         foreach (var row in selectedRows)
@@ -518,9 +550,12 @@ namespace LinearCutWpf.Controls
                                 foreach (var stock in result.UsedStocks)
                                 {
                                     table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(row.Article);
+                                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(row.Name);
+                                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(row.Color);
                                     table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(stock.Key.ToString());
                                     table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(stock.Value.ToString());
-                                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(Math.Round(result.KpdPercent, 2).ToString());
+                                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(Math.Round(stock.Key * stock.Value / 1000.0, 2).ToString("F2"));
+                                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(Math.Round(result.MaterialUtilizationRate, 2).ToString());
                                 }
                             }
                         }
@@ -567,7 +602,7 @@ namespace LinearCutWpf.Controls
                             table.Cell().Padding(2).Text("Общая длина остатков:");
                             table.Cell().Padding(2).Text((totalRemainderLength / 1000).ToString("F2") + " м");
 
-                            table.Cell().Padding(2).Text("%Использования материала:");
+                            table.Cell().Padding(2).Text("%ИспМат:");
                             table.Cell().Padding(2).Text(Math.Round(overallKpd, 2).ToString("F2") + "%");
                         });
                     });
@@ -589,6 +624,8 @@ namespace LinearCutWpf.Controls
         {
             var result = row.ResultData;
             if (result == null || _originalData == null) return;
+            // Для ручного раскроя используем OriginalGroupKey для поиска деталей в исходной таблице
+            string searchKey = result.IsManualCut ? result.OriginalGroupKey : result.GroupKey;
 
             var partsData = new List<dynamic>();
             foreach (System.Data.DataRow dtRow in _originalData.Rows)
@@ -596,7 +633,7 @@ namespace LinearCutWpf.Controls
                 var rowKey = _keyColumnNames != null && _keyColumnNames.Any() 
                     ? DataHelper.GetArticleName(_keyColumnNames.Select(k => dtRow[k]?.ToString()))
                     : "";
-                if (rowKey == result.GroupKey)
+                if (rowKey == searchKey)
                 {
                     double length = 0;
                     if (dtRow[_valColumnName] != DBNull.Value)
@@ -623,6 +660,7 @@ namespace LinearCutWpf.Controls
             var groupedParts = partsData
                 .GroupBy(p => new { p.Length, p.LeftAngle, p.RightAngle })
                 .Select(g => new { g.Key.Length, g.Key.LeftAngle, g.Key.RightAngle, TotalQty = g.Sum(x => (int)x.Qty) })
+                .Where(x => x.TotalQty > 0)
                 .OrderByDescending(x => x.Length)
                 .ToList();
 
@@ -666,11 +704,9 @@ namespace LinearCutWpf.Controls
             container.Column(column =>
             {
                 // Заголовок артикула
-                column.Item().Background(Colors.Blue.Lighten4).Padding(5).Row(r =>
-                {
-                    r.RelativeItem().Text($"Артикул: {row.Article}").SemiBold();
-                    r.RelativeItem().Text($"Наименование: {row.Name}").SemiBold();
-                });
+                var pdfArticleHeaderText = $"Артикул: {row.Article} | {row.Name}";
+                if (!string.IsNullOrEmpty(row.Color)) pdfArticleHeaderText += $" | {row.Color}";
+                column.Item().Background(Colors.Blue.Lighten4).Padding(5).Text(pdfArticleHeaderText).SemiBold();
 
                 // Перечень заготовок
                 column.Item().PaddingTop(5).Element(c => ComposePartsListTable(c, row));
@@ -731,8 +767,8 @@ namespace LinearCutWpf.Controls
                         table.Cell().Padding(2).Text("Общая длина остатков:");
                         table.Cell().Padding(2).Text((result.TotalRemainderLength / 1000).ToString("F2") + " м");
 
-                        table.Cell().Padding(2).Text("%Использования материала:");
-                        table.Cell().Padding(2).Text(Math.Round(result.KpdPercent, 2).ToString("F2") + "%");
+                        table.Cell().Padding(2).Text("%ИспМат:");
+                        table.Cell().Padding(2).Text(Math.Round(result.MaterialUtilizationRate, 2).ToString("F2") + "%");
                     });
                 });
             });
@@ -784,14 +820,14 @@ namespace LinearCutWpf.Controls
                 // Заголовок артикула и детализация с защитой от разрыва страницы (оставляем хотя бы 50 пикселей)
                 column.Item().EnsureSpace(50).Column(headCol => 
                 {
-                    headCol.Item().Background(Colors.Grey.Lighten3).Padding(5).Row(r =>
-                    {
-                        r.RelativeItem().Text($"Артикул: {row.Article}").FontSize(12).SemiBold();
-                        r.RelativeItem().Text($"Наименование: {row.Name}").FontSize(12).SemiBold();
-                    });
+                    var visualHeaderText = $"Артикул: {row.Article} | {row.Name}";
+                    if (!string.IsNullOrEmpty(row.Color)) visualHeaderText += $" | {row.Color}";
+                    headCol.Item().Background(Colors.Grey.Lighten3).Padding(5).Text(visualHeaderText).FontSize(12).SemiBold();
 
                     // Перечень заготовок
                     headCol.Item().PaddingTop(5).Element(c => ComposePartsListTable(c, row));
+
+                    headCol.Item().PaddingVertical(2).Text($"Общее количество деталей: {result.TotalPartsCount} шт").SemiBold();
 
                     headCol.Item().PaddingVertical(5).Text("Детализация раскроя").SemiBold();
                 });
@@ -807,14 +843,36 @@ namespace LinearCutWpf.Controls
                     // Защищаем отдельный хлыст (текст + картинка) от разбиения, требуется около 120 пикселей (текст + SVG 80 + отступ 10)
                     column.Item().EnsureSpace(120).PaddingBottom(10).Column(barCol =>
                     {
-                        barCol.Item().Text($"Хлыст: {bar.StockLength} мм (Кол-во: {count} хлыстов)");
+                        barCol.Item().Text($"{row.Article} Хлыст: {bar.StockLength} мм (Кол-во: {count} хлыстов)");
                         
                         // Отрисовка графической схемы хлыста
                         string svgString = GenerateVisualBarSvg(800, 80, bar, _originalData, _keyColumnNames, _valColumnName, _leftAngleColumnName, _rightAngleColumnName);
                         barCol.Item().Svg(svgString);
                     });
                 }
+
+                // Статистика (справа, на светло-сером фоне с закруглёнными краями)
+                column.Item().PaddingTop(10).AlignRight().Width(300).Background(Colors.Grey.Lighten3).Padding(8).Column(statsCol =>
+                {
+                    int partsCount = result.TotalPartsCount;
+                    int stockCount = result.UsedStocks.Values.Sum();
+                    statsCol.Item().Text("Общая статистика:").SemiBold();
+                    statsCol.Item().Text($"Оптимизировано {partsCount} {Plural(partsCount, "деталь", "детали", "деталей")} общей длиной {result.TotalPartsLength / 1000.0:F2} м");
+                    statsCol.Item().Text($"Использовано {stockCount} {Plural(stockCount, "хлыст", "хлыста", "хлыстов")} общей длиной {result.TotalStockLength / 1000.0:F2} м");
+                    statsCol.Item().Text($"Процент использования материала: {result.MaterialUtilizationRate:F2}%");
+                });
             });
+        }
+
+        private static string Plural(int n, string one, string two, string five)
+        {
+            int abs = Math.Abs(n);
+            int mod10 = abs % 10;
+            int mod100 = abs % 100;
+            if (mod100 >= 11 && mod100 <= 19) return five;
+            if (mod10 == 1) return one;
+            if (mod10 >= 2 && mod10 <= 4) return two;
+            return five;
         }
 
         private string GenerateVisualBarSvg(float width, float height, CutBarDetailed bar, System.Data.DataTable originalData, List<string> keyColumns, string valColumn, string leftAngleColumn, string rightAngleColumn)

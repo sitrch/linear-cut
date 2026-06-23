@@ -7,6 +7,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using LinearCutWpf.Models;
 
 namespace LinearCutWpf.Controls
@@ -167,6 +168,15 @@ namespace LinearCutWpf.Controls
         /// </summary>
         private void BuildLeftPanel()
         {
+            // Информация об артикуле
+            var articleNameTxt = FindName("articleNameText") as TextBlock;
+            if (articleNameTxt != null)
+            {
+                string displayName = BuildArticleDisplayName();
+                articleNameTxt.Text = displayName;
+            }
+            UpdateArticleColorIndicator();
+
             // Хлыст
             cbBarLength.Items.Clear();
             foreach (var sl in _stockLengths)
@@ -647,6 +657,176 @@ namespace LinearCutWpf.Controls
                 indicatorManual.Text = isDefaultManual ? "✓" : "●";
                 indicatorManual.Foreground = isDefaultManual ? Brushes.Green : Brushes.Red;
             }
+
+            UpdateArticleColorIndicator();
+        }
+
+        /// <summary>
+        /// Формирует отображаемое имя артикула с данными из столбцов "Наименование" и "Цвет".
+        /// </summary>
+        private string BuildArticleDisplayName()
+        {
+            var parts = new List<string>();
+
+            // Базовое имя (ключ артикула)
+            if (!string.IsNullOrWhiteSpace(_articleName))
+                parts.Add(_articleName);
+
+            // Получаем значения столбцов "Наименование" и "Цвет" из первой строки данных
+            var nameCols = _getCheckedCols?.Invoke("IsName") ?? new List<string>();
+            var colorCols = _getCheckedCols?.Invoke("IsColor") ?? new List<string>();
+
+            IEnumerable<DataRow> rowsToProcess = null;
+            if (_articleView != null)
+            {
+                var rows = new List<DataRow>();
+                foreach (DataRowView rv in _articleView)
+                    rows.Add(rv.Row);
+                rowsToProcess = rows;
+            }
+            else if (_articleRows != null)
+            {
+                rowsToProcess = _articleRows;
+            }
+
+            if (rowsToProcess != null)
+            {
+                var firstRow = rowsToProcess.FirstOrDefault();
+                if (firstRow != null)
+                {
+                    foreach (var nameCol in nameCols)
+                    {
+                        if (firstRow.Table.Columns.Contains(nameCol))
+                        {
+                            var val = firstRow[nameCol];
+                            if (val != DBNull.Value && !string.IsNullOrWhiteSpace(val?.ToString()))
+                                parts.Add(val.ToString());
+                        }
+                    }
+
+                    foreach (var colorCol in colorCols)
+                    {
+                        if (firstRow.Table.Columns.Contains(colorCol))
+                        {
+                            var val = firstRow[colorCol];
+                            if (val != DBNull.Value && !string.IsNullOrWhiteSpace(val?.ToString()))
+                                parts.Add(val.ToString());
+                        }
+                    }
+                }
+            }
+
+            return string.Join(" | ", parts);
+        }
+
+        /// <summary>
+        /// Обновляет цветовой индикатор артикула в левой панели.
+        /// Зелёный — настройки по умолчанию, красный — есть индивидуальные настройки.
+        /// </summary>
+        private void UpdateArticleColorIndicator()
+        {
+            var indicator = FindName("articleColorIndicator") as Ellipse;
+            if (indicator == null || _settings == null) return;
+
+            bool hasCustom = _settings.HasCustomSettings(_defaultBarLength, _defaultPreset);
+            indicator.Fill = hasCustom ? Brushes.Red : Brushes.Green;
+        }
+
+        /// <summary>
+        /// Обработчик изменения выделенных ячеек в DataGrid.
+        /// Рассчитывает сумму значений по каждому столбцу и отображает в строке статуса.
+        /// </summary>
+        private void OnSelectedCellsChanged(object sender, SelectedCellsChangedEventArgs e)
+        {
+            var statusBar = FindName("statusBarText") as TextBlock;
+            if (statusBar == null) return;
+
+            var selectedCells = gridDetails.SelectedCells;
+            if (selectedCells.Count == 0)
+            {
+                statusBar.Text = "";
+                return;
+            }
+
+            // Группируем выделенные ячейки по столбцам
+            var columnValues = new Dictionary<string, List<object>>();
+
+            foreach (var cellInfo in selectedCells)
+            {
+                var column = cellInfo.Column;
+                if (column == null) continue;
+
+                string header = column.Header?.ToString() ?? "";
+                var item = cellInfo.Item;
+                if (item == null) continue;
+
+                // Получаем значение через Binding
+                var binding = column is DataGridTextColumn textCol ? textCol.Binding as System.Windows.Data.Binding : null;
+                object value = null;
+
+                if (binding != null && !string.IsNullOrEmpty(binding.Path?.Path))
+                {
+                    var prop = item.GetType().GetProperty(binding.Path.Path);
+                    if (prop != null)
+                    {
+                        value = prop.GetValue(item);
+                    }
+                }
+
+                if (!columnValues.ContainsKey(header))
+                    columnValues[header] = new List<object>();
+
+                columnValues[header].Add(value);
+            }
+
+            // Формируем текст статуса — всегда в формате "Наименование столбца: ххх"
+            var parts = new List<string>();
+
+            foreach (var kvp in columnValues)
+            {
+                string header = kvp.Key;
+                var values = kvp.Value;
+
+                if (header == "Длина")
+                {
+                    double sum = 0;
+                    int count = 0;
+                    foreach (var v in values)
+                    {
+                        if (v != null && double.TryParse(v.ToString(), out double d))
+                        {
+                            sum += d;
+                            count++;
+                        }
+                    }
+                    if (count > 0)
+                        parts.Add($"Длина: {sum}");
+                }
+                else if (header == "Количество")
+                {
+                    int sum = 0;
+                    int count = 0;
+                    foreach (var v in values)
+                    {
+                        if (v != null && int.TryParse(v.ToString(), out int i))
+                        {
+                            sum += i;
+                            count++;
+                        }
+                    }
+                    if (count > 0)
+                        parts.Add($"Количество: {sum}");
+                }
+                else
+                {
+                    // Для текстовых и прочих столбцов — количество выделенных ячеек
+                    int count = values.Count(v => v != null && !string.IsNullOrWhiteSpace(v?.ToString()));
+                    if (count > 0)
+                        parts.Add($"{header}: {count}");
+                }
+            }
+
+            statusBar.Text = string.Join("  |  ", parts);
         }
     }
 }

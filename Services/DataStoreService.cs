@@ -281,6 +281,7 @@ namespace LinearCutWpf.Services
                     articles.Add(key);
                 }
             }
+            articles.Sort(NaturalStringComparer.Instance);
             return articles;
         }
 

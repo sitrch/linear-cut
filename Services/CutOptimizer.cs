@@ -159,33 +159,57 @@ namespace LinearCutWpf.Services
         /// <returns>Список сгенерированных детализированных раскройных карт.</returns>
         public static List<CutBarDetailed> Optimize(List<PartItem> parts, List<double> infiniteStocks, List<double> finiteStocks, double tStart, double tEnd, double cWidth)
         {
+            // Конвертируем старый формат finiteStocks в PreFilledBar для обратной совместимости
+            var preFilledBars = finiteStocks?.Select(f => new PreFilledBar
+            {
+                StockLength = f,
+                FreeSpace = f,
+                ManualParts = new List<double>()
+            }).ToList();
+            return Optimize(parts, infiniteStocks, preFilledBars, tStart, tEnd, cWidth);
+        }
+
+        /// <summary>
+        /// Детализированная оптимизация раскроя с поддержкой частично заполнённых хлыстов (ручной раскрой).
+        /// </summary>
+        /// <param name="parts">Список объектов деталей (PartItem).</param>
+        /// <param name="infiniteStocks">Список доступных длин целых хлыстов (бесконечное кол-во).</param>
+        /// <param name="preFilledBars">Список частично заполненных хлыстов из ручного раскроя.</param>
+        /// <param name="tStart">Торцевой припуск в начале.</param>
+        /// <param name="tEnd">Торцевой припуск в конце.</param>
+        /// <param name="cWidth">Ширина реза (диска).</param>
+        /// <returns>Список сгенерированных детализированных раскройных карт.</returns>
+        public static List<CutBarDetailed> Optimize(List<PartItem> parts, List<double> infiniteStocks, List<PreFilledBar> preFilledBars, double tStart, double tEnd, double cWidth)
+        {
             var results = new List<CutBarDetailed>();
             var remaining = parts.OrderByDescending(p => p.Length).ToList();
             double reduction = (tStart - cWidth / 2) + (tEnd - cWidth / 2);
             
-            var availableFiniteStocks = finiteStocks?.OrderByDescending(x => x).ToList() ?? new List<double>();
+            var availablePreFilled = preFilledBars?.OrderByDescending(x => x.FreeSpace).ToList() ?? new List<PreFilledBar>();
 
             while (remaining.Any())
             {
                 double bestS = 0;
-                bool useFinite = false;
-                int finiteIdx = -1;
+                bool usePreFilled = false;
+                int pfIdx = -1;
                 double capacity = 0;
+                List<double> manualParts = null;
 
-                for (int i = 0; i < availableFiniteStocks.Count; i++)
+                // Сначала пытаемся использовать частично заполненные хлысты (ручной раскрой)
+                for (int i = 0; i < availablePreFilled.Count; i++)
                 {
-                    double s = availableFiniteStocks[i];
-                    if (s >= remaining[0].Length)
+                    if (availablePreFilled[i].FreeSpace >= remaining[0].Length)
                     {
-                        bestS = s;
-                        capacity = s; 
-                        useFinite = true;
-                        finiteIdx = i;
+                        bestS = availablePreFilled[i].StockLength;
+                        capacity = availablePreFilled[i].FreeSpace;
+                        manualParts = availablePreFilled[i].ManualParts;
+                        usePreFilled = true;
+                        pfIdx = i;
                         break;
                     }
                 }
 
-                if (!useFinite)
+                if (!usePreFilled)
                 {
                     bestS = infiniteStocks.OrderByDescending(x => x).FirstOrDefault(s => (s - reduction) >= remaining[0].Length);
                     if (bestS == 0) { remaining.RemoveAt(0); continue; }
@@ -193,7 +217,7 @@ namespace LinearCutWpf.Services
                 }
                 else
                 {
-                    availableFiniteStocks.RemoveAt(finiteIdx);
+                    availablePreFilled.RemoveAt(pfIdx);
                 }
 
                 var currentBarParts = new List<PartItem>();
@@ -221,7 +245,9 @@ namespace LinearCutWpf.Services
                 {
                     StockLength = bestS,
                     Parts = currentBarParts,
-                    Remainder = Math.Round(capacity - currentUsed, 2)
+                    Remainder = Math.Round(capacity - currentUsed, 2),
+                    IsFromManualCut = usePreFilled,
+                    ManualParts = usePreFilled ? new List<double>(manualParts) : new List<double>()
                 });
             }
             return results;

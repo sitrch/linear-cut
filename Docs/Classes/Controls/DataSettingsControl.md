@@ -48,7 +48,8 @@
     - `OnColumnRoleChanged`: Обработчик изменения роли через селектор. Обновляет `_columnConfigTable`, реализует RadioButton-поведение между столбцами (кроме `IsKey`), вызывает `_dataStore.UpdateColumnConfig()` и `RefreshColumnsVisuals()`.
     - `ProcessDataLogic()`: Обрабатывает `_mainDataTable` перед отображением (замена точек на запятые, удаление пустых строк, автозаполнение ключей).
     - `GetCheckedCols(string colType)`: Вспомогательный метод для получения списка столбцов, отмеченных определенной ролью.
-- `RefreshColumnsVisuals()`: Применяет цветовую раскраску к заголовкам `dgInput` через `HeaderStyle` с `BasedOn` базового стиля из XAML. Цвета: IsKey — LightGreen, IsName — LightPink, IsVal — LightYellow, IsQty — LightCyan, IsLeftAngle — LightGray, IsRightAngle — LightGray, IsColor — LightSalmon.
+- `RefreshColumnsVisuals()`: Применяет цветовую раскраску к заголовкам `dgInput` через `HeaderStyle` с `BasedOn` базового стиля из XAML. Цвета: IsKey — LightGreen, IsName — LightPink, IsVal — LightYellow, IsQty — LightCyan, IsLeftAngle — LightBlue, IsRightAngle — Lavender, IsColor — LightSalmon.
+- `AutoAssignColumnRoles(DataTable)`: Автоматически назначает роли столбцам на основе их заголовков при загрузке данных. Правила: "Артикул" → IsKey, "Наименование" → IsName, "Длина" → IsVal, "Цвет" → IsColor, содержит "лев" и "угол" → IsLeftAngle, содержит "прав" и "угол" → IsRightAngle. Для взаимоисключающих ролей назначается только первому совпавшему столбцу. IsKey может быть назначен нескольким столбцам.
 - **Управление настройками (CRUD):**
   - `OnAddStock`, `OnRemoveStock`: Добавление и удаление длины хлыста.
   - `OnAddPreset`, `EditPreset`, `DeletePreset`: Управление пресетами через диалоговые окна (Window).
@@ -63,8 +64,8 @@
   - `IsName` — LightPink (светло-розовый)
   - `IsVal` — LightYellow (светло-желтый)
   - `IsQty` — LightCyan (светло-голубой)
-  - `IsLeftAngle` — LightGray (светло-серый)
-  - `IsRightAngle` — LightGray (светло-серый)
+  - `IsLeftAngle` — LightBlue (светло-синий)
+  - `IsRightAngle` — Lavender (лавандовый)
   - `IsColor` — LightSalmon (светло-лососевый)
 - **Радио-кнопка между столбцами:** Метод `OnColumnRoleChanged` гарантирует, что одна роль (кроме `IsKey`) может быть назначена только одному столбцу. Если роль назначается новому столбцу — она автоматически снимается с предыдущего.
 - **Роль Key (IsKey) множественная:** Роль `IsKey` может быть назначена нескольким столбцам одновременно (например, артикул + доп. идентификатор).

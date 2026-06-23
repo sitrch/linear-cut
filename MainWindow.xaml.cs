@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -155,7 +156,7 @@ namespace LinearCutWpf
                     SaveProfileHeights();
                 }
 
-                if (e.RemovedItems.Count > 0 && e.RemovedItems[0] is TabItem removedTab2 && removedTab2.Header?.ToString() == "Ввод данных")
+                if (e.RemovedItems.Count > 0 && e.RemovedItems[0] is TabItem removedTab2 && removedTab2.Header?.ToString() == "Данные")
                 {
                     if (!dataSettingsControl.ValidateData())
                     {
@@ -243,6 +244,8 @@ namespace LinearCutWpf
             var keys = dataSettingsControl.GetCheckedCols("IsKey");
             var vals = dataSettingsControl.GetCheckedCols("IsVal");
             var qtyList = dataSettingsControl.GetCheckedCols("IsQty");
+            var nameCols = dataSettingsControl.GetCheckedCols("IsName");
+            var colorCols = dataSettingsControl.GetCheckedCols("IsColor");
             var qtyCol = qtyList.FirstOrDefault();
 
             if (!keys.Any() || !vals.Any()) return;
@@ -251,20 +254,16 @@ namespace LinearCutWpf
             var results = new System.Collections.Generic.List<Services.CuttingService.OptimizationResult>();
             var allGroupsForVerification = new System.Collections.Generic.List<Services.CuttingService.GroupData>();
 
-            var dtRows = dataSettingsControl.MainDataTable.Rows;
-            var validRows = dtRows.Cast<DataRow>()
-                .Where((r, i) => !dataSettingsControl.InvalidRows.Contains(i));
-                
-            var groupsData = validRows
-                .GroupBy(r => DataHelper.GetArticleName(keys.Select(k => r[k]?.ToString())));
+            var uniqueArticles = DataStoreService.Instance.GetUniqueArticles();
 
-            foreach (var g in groupsData)
+            foreach (var groupKey in uniqueArticles)
             {
-                string groupKey = g.Key;
-                // Игнорируем пустые артикулы
                 if (string.IsNullOrWhiteSpace(groupKey)) continue;
+
+                var articleView = DataStoreService.Instance.GetArticleView(groupKey);
                 var dt = dataSettingsControl.MainDataTable.Clone();
-                foreach (var r in g) dt.ImportRow(r);
+                foreach (DataRowView drv in articleView)
+                    dt.ImportRow(drv.Row);
 
                 var articleSettings = groupingControl.GetOrCreateArticleSettings(groupKey);
                 var preset = groupingControl.GetEffectivePreset(groupKey);
@@ -293,6 +292,32 @@ namespace LinearCutWpf
                     enabledStocks = dataSettingsControl.StockLengths.Where(s => s.IsEnabled).ToList();
                 }
 
+                // Формируем описание артикула (наименование + цвет) из первой строки группы
+                var descriptionParts = new System.Collections.Generic.List<string>();
+                DataRow firstRow = dt.Rows.Count > 0 ? dt.Rows[0] : null;
+                if (firstRow != null)
+                {
+                    foreach (var nameCol in nameCols)
+                    {
+                        if (firstRow.Table.Columns.Contains(nameCol))
+                        {
+                            var val = firstRow[nameCol];
+                            if (val != DBNull.Value && !string.IsNullOrWhiteSpace(val?.ToString()))
+                                descriptionParts.Add(val.ToString());
+                        }
+                    }
+                    foreach (var colorCol in colorCols)
+                    {
+                        if (firstRow.Table.Columns.Contains(colorCol))
+                        {
+                            var val = firstRow[colorCol];
+                            if (val != DBNull.Value && !string.IsNullOrWhiteSpace(val?.ToString()))
+                                descriptionParts.Add(val.ToString());
+                        }
+                    }
+                }
+                string articleDescription = descriptionParts.Count > 0 ? string.Join(" | ", descriptionParts) : null;
+
                 // Здесь берется коллекция ManualCuts из настроек конкретной группы/артикула
                 var groupResults = optimizer.OptimizeAllGroups(
                     groupList,
@@ -300,6 +325,10 @@ namespace LinearCutWpf
                     articleSettings.ManualCuts,
                     preset
                 );
+
+                // Назначаем описание артикула каждому результату
+                foreach (var res in groupResults)
+                    res.ArticleDescription = articleDescription;
 
                 results.AddRange(groupResults);
             }
@@ -342,6 +371,15 @@ namespace LinearCutWpf
                                 "Ошибка проверки", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
 
+            // Проверка целостности перемещения хлыстов ручного раскроя
+            var defaultCutWidth = dataSettingsControl.DefaultPreset?.CutWidth ?? 4;
+            var integrityErrors = optimizer.VerifyManualBarsIntegrity(results, allGroupsForVerification, defaultCutWidth);
+            if (integrityErrors.Count > 0)
+            {
+                MessageBox.Show($"Ошибка целостности ручного раскроя:\r\n\r\n{string.Join("\r\n", integrityErrors)}", 
+                                "Ошибка проверки целостности", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+
             var resultsControlObj = (ResultsControl)FindName("resultsControl");
             if (resultsControlObj != null)
             {
@@ -357,7 +395,8 @@ namespace LinearCutWpf
                 string objectName = dataSettingsControl.ObjectName;
                 string leftAngleCol = dataSettingsControl.GetCheckedCols("IsLeftAngle").FirstOrDefault();
                 string rightAngleCol = dataSettingsControl.GetCheckedCols("IsRightAngle").FirstOrDefault();
-                exportControlObj.LoadData(results, dataSettingsControl.MainDataTable, keyColumnNames, nameColumnName, valColumnName, qtyCol, objectName, leftAngleCol, rightAngleCol);
+                string colorCol = dataSettingsControl.GetCheckedCols("IsColor").FirstOrDefault();
+                exportControlObj.LoadData(results, dataSettingsControl.MainDataTable, keyColumnNames, nameColumnName, valColumnName, qtyCol, objectName, leftAngleCol, rightAngleCol, colorCol);
             }
         }
     }
