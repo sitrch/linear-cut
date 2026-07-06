@@ -852,14 +852,32 @@ namespace LinearCutWpf.Controls
                 }
 
                 // Статистика (справа, на светло-сером фоне с закруглёнными краями)
-                column.Item().PaddingTop(10).AlignRight().Width(300).Background(Colors.Grey.Lighten3).Padding(8).Column(statsCol =>
+                column.Item().PaddingTop(10).AlignRight().Width(300)
+                    .Border(1).BorderColor(Colors.Grey.Lighten2).CornerRadius(5)
+                    .Background(Colors.Grey.Lighten3).Padding(8).Column(statsCol =>
                 {
                     int partsCount = result.TotalPartsCount;
                     int stockCount = result.UsedStocks.Values.Sum();
-                    statsCol.Item().Text("Общая статистика:").SemiBold();
-                    statsCol.Item().Text($"Оптимизировано {partsCount} {Plural(partsCount, "деталь", "детали", "деталей")} общей длиной {result.TotalPartsLength / 1000.0:F2} м");
-                    statsCol.Item().Text($"Использовано {stockCount} {Plural(stockCount, "хлыст", "хлыста", "хлыстов")} общей длиной {result.TotalStockLength / 1000.0:F2} м");
-                    statsCol.Item().Text($"Процент использования материала: {result.MaterialUtilizationRate:F2}%");
+                    statsCol.Item().Text("Общая статистика:").SemiBold().Italic();
+                    statsCol.Item().Text(text =>
+                    {
+                        text.Span("Оптимизировано ").Italic();
+                        text.Span($"{partsCount}").Bold().Italic();
+                        text.Span($" {Plural(partsCount, "деталь", "детали", "деталей")} общей длиной ").Italic();
+                        text.Span($"{result.TotalPartsLength / 1000.0:F2} м").Bold().Italic();
+                    });
+                    statsCol.Item().Text(text =>
+                    {
+                        text.Span("Использовано ").Italic();
+                        text.Span($"{stockCount}").Bold().Italic();
+                        text.Span($" {Plural(stockCount, "хлыст", "хлыста", "хлыстов")} общей длиной ").Italic();
+                        text.Span($"{result.TotalStockLength / 1000.0:F2} м").Bold().Italic();
+                    });
+                    statsCol.Item().Text(text =>
+                    {
+                        text.Span("Процент использования материала: ").Italic();
+                        text.Span($"{result.MaterialUtilizationRate:F2}%").Bold().Italic();
+                    });
                 });
             });
         }
