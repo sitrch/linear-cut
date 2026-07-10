@@ -13,6 +13,11 @@ namespace LinearCutWpf.Services
     public static class CutSettingsProvider
     {
         /// <summary>
+        /// Максимальное количество последних введённых значений поля "Объект", сохраняемых в истории.
+        /// </summary>
+        public const int MaxRecentObjects = 5;
+
+        /// <summary>
         /// Путь к файлу настроек (settings.xml в директории приложения).
         /// </summary>
         private static string XmlPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.xml");
@@ -159,6 +164,35 @@ namespace LinearCutWpf.Services
             var el = doc.Root.Element("LeftPanelWidth");
             if (el != null) el.Remove();
             doc.Root.Add(new XElement("LeftPanelWidth", new XAttribute("Value", width)));
+            doc.Save(XmlPath);
+        }
+
+        /// <summary>
+        /// Загружает историю последних значений поля "Объект" (результаты сохранённых раскроев).
+        /// </summary>
+        /// <returns>Список уникальных значений (не более <see cref="MaxRecentObjects"/>).</returns>
+        public static List<string> LoadRecentObjects()
+        {
+            if (!File.Exists(XmlPath)) return new List<string>();
+
+            return XDocument.Load(XmlPath).Root.Element("RecentObjects")?.Elements("Object")
+                .Select(o => o.Value)
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .ToList() ?? new List<string>();
+        }
+
+        /// <summary>
+        /// Сохраняет историю последних значений поля "Объект" в файл настроек.
+        /// </summary>
+        /// <param name="objects">Список значений (уникальные, не более <see cref="MaxRecentObjects"/>).</param>
+        public static void SaveRecentObjects(List<string> objects)
+        {
+            var doc = File.Exists(XmlPath) ? XDocument.Load(XmlPath) : new XDocument(new XElement("Settings"));
+            var el = doc.Root.Element("RecentObjects");
+            if (el != null) el.Remove();
+            doc.Root.Add(new XElement("RecentObjects",
+                objects.Select(o => new XElement("Object", o))
+            ));
             doc.Save(XmlPath);
         }
 

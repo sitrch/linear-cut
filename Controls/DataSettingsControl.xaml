@@ -19,7 +19,8 @@
         <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="10">
             <StackPanel>
                 <TextBlock Text="Объект:" Margin="0,0,0,5" FontWeight="Bold"/>
-                <TextBox x:Name="tbObjectName" Height="25" Margin="0,0,0,10" VerticalContentAlignment="Center"/>
+                <ComboBox x:Name="tbObjectName" Height="25" Margin="0,0,0,10" VerticalContentAlignment="Center"
+                          IsEditable="True" StaysOpenOnEdit="True" MaxDropDownHeight="125"/>
 
                 <Button x:Name="btnLoad" Content="Открыть .xlsx" Height="40" Background="AliceBlue" Click="OnOpenFileClick"/>
                 <ComboBox x:Name="cbSheetSelector" Margin="0,5,0,0" Height="30" SelectionChanged="OnSheetSelected"/>

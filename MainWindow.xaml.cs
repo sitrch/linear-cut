@@ -423,6 +423,7 @@ namespace LinearCutWpf
                 var keyColumnNames = keys.ToList();
                 string valColumnName = vals.FirstOrDefault();
                 string objectName = dataSettingsControl.ObjectName;
+                dataSettingsControl.AddRecentObject();
                 string leftAngleCol = dataSettingsControl.GetCheckedCols("IsLeftAngle").FirstOrDefault();
                 string rightAngleCol = dataSettingsControl.GetCheckedCols("IsRightAngle").FirstOrDefault();
                 string colorCol = dataSettingsControl.GetCheckedCols("IsColor").FirstOrDefault();

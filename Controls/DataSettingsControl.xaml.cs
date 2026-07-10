@@ -49,6 +49,28 @@ namespace LinearCutWpf.Controls
         public string ObjectName => tbObjectName.Text.Trim();
 
         /// <summary>
+        /// Добавляет текущее значение поля "Объект" в историю сохранённых раскроев.
+        /// Список содержит только уникальные значения, не более <see cref="CutSettingsProvider.MaxRecentObjects"/>.
+        /// Если такое значение уже есть в истории — добавление не производится.
+        /// </summary>
+        public void AddRecentObject()
+        {
+            string name = ObjectName;
+            if (string.IsNullOrWhiteSpace(name)) return;
+
+            var list = CutSettingsProvider.LoadRecentObjects();
+            if (list.Any(o => string.Equals(o, name, StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            list.Insert(0, name);
+            if (list.Count > CutSettingsProvider.MaxRecentObjects)
+                list = list.Take(CutSettingsProvider.MaxRecentObjects).ToList();
+
+            CutSettingsProvider.SaveRecentObjects(list);
+            tbObjectName.ItemsSource = list;
+        }
+
+        /// <summary>
         /// Событие, вызываемое после успешной загрузки и первичной обработки данных из файла.
         /// </summary>
         public event EventHandler DataLoaded;
@@ -102,6 +124,9 @@ namespace LinearCutWpf.Controls
             _stockLengths = CutSettingsProvider.LoadStockLengths();
             _defaultBarLength = CutSettingsProvider.LoadDefaultStockLength();
             UpdateDefaultCombos();
+
+            // История значений поля "Объект" (поле остаётся пустым при открытии)
+            tbObjectName.ItemsSource = CutSettingsProvider.LoadRecentObjects();
         }
 
         private void GridSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
