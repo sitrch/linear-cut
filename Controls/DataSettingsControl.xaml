@@ -65,29 +65,42 @@
         <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="LightGray" DragCompleted="GridSplitter_DragCompleted"/>
 
         <!-- Правая панель - данные -->
-        <DataGrid x:Name="dgInput" Grid.Column="2" IsReadOnly="True" Background="White"
-                  AutoGenerateColumns="True" LoadingRow="OnDgInputLoadingRow"
-                  AutoGeneratingColumn="OnDgInputAutoGeneratingColumn"
-                  Loaded="OnDgInputLoaded"
-                  GridLinesVisibility="All"
-                  HorizontalGridLinesBrush="#FFD0D0D0"
-                  VerticalGridLinesBrush="#FFD0D0D0">
-            <DataGrid.Resources>
-                <Style TargetType="DataGridColumnHeader">
-                    <Setter Property="FontWeight" Value="Bold"/>
-                    <Setter Property="FontStyle" Value="Italic"/>
-                    <Setter Property="Background" Value="#FFF0F0F0"/>
-                    <Setter Property="BorderBrush" Value="#FFD0D0D0"/>
-                    <Setter Property="BorderThickness" Value="0,0,1,1"/>
-                    <Setter Property="Padding" Value="4,2"/>
-                </Style>
-                <Style TargetType="DataGridCell">
-                    <Setter Property="Background" Value="White"/>
-                    <Setter Property="BorderBrush" Value="#FFD0D0D0"/>
-                    <Setter Property="BorderThickness" Value="0,0,1,1"/>
-                    <Setter Property="FontWeight" Value="Normal"/>
-                </Style>
-            </DataGrid.Resources>
-        </DataGrid>
+        <Grid Grid.Column="2">
+            <DataGrid x:Name="dgInput" IsReadOnly="True" Background="White"
+                      AutoGenerateColumns="True" LoadingRow="OnDgInputLoadingRow"
+                      AutoGeneratingColumn="OnDgInputAutoGeneratingColumn"
+                      Loaded="OnDgInputLoaded"
+                      GridLinesVisibility="All"
+                      HorizontalGridLinesBrush="#FFD0D0D0"
+                      VerticalGridLinesBrush="#FFD0D0D0">
+                <DataGrid.Resources>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="FontWeight" Value="Bold"/>
+                        <Setter Property="FontStyle" Value="Italic"/>
+                        <Setter Property="Background" Value="#FFF0F0F0"/>
+                        <Setter Property="BorderBrush" Value="#FFD0D0D0"/>
+                        <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                        <Setter Property="Padding" Value="4,2"/>
+                    </Style>
+                    <Style TargetType="DataGridCell">
+                        <Setter Property="Background" Value="White"/>
+                        <Setter Property="BorderBrush" Value="#FFD0D0D0"/>
+                        <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                        <Setter Property="FontWeight" Value="Normal"/>
+                    </Style>
+                </DataGrid.Resources>
+            </DataGrid>
+
+            <!-- Индикатор фоновой загрузки -->
+            <Border x:Name="loadingIndicator" Visibility="Collapsed"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Padding="16,10"
+                    Background="#EE333333" CornerRadius="4">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="loadingText" Text="Загрузка…" Foreground="White"
+                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

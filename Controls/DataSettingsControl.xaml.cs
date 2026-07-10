@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -24,6 +26,8 @@ namespace LinearCutWpf.Controls
         private string _currentFilePath;
         private HashSet<int> _invalidRows = new HashSet<int>();
         private bool _isLoading = false;
+        private CancellationTokenSource _loadCts;
+        private byte[] _fileBytes;
         private DataStoreService _dataStore => DataStoreService.Instance;
         private readonly Dictionary<string, ColumnRoleSelector> _columnRoleSelectors = new Dictionary<string, ColumnRoleSelector>();
 
@@ -68,6 +72,7 @@ namespace LinearCutWpf.Controls
             this.Unloaded += (s, e) =>
             {
                 _dataStore.ProcessedDataChanged -= OnProcessedDataChanged;
+                _loadCts?.Cancel();
             };
         }
 
@@ -131,57 +136,74 @@ namespace LinearCutWpf.Controls
             }
         }
 
-        private void OnOpenFileClick(object sender, RoutedEventArgs e)
+        private async void OnOpenFileClick(object sender, RoutedEventArgs e)
         {
             var ofd = new OpenFileDialog { Filter = "Excel|*.xlsx" };
-            if (ofd.ShowDialog() == true)
+            if (ofd.ShowDialog() != true) return;
+
+            if (IsFileLocked(ofd.FileName))
             {
-                if (IsFileLocked(ofd.FileName))
-                {
-                    MessageBox.Show($"Файл \"{ofd.FileName}\" занят другим приложением.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
+                MessageBox.Show($"Файл \"{ofd.FileName}\" занят другим приложением.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
 
-                _currentFilePath = ofd.FileName;
-                _isLoading = true;
-                cbSheetSelector.Items.Clear();
-                _columnConfigTable = null;
-                _invalidRows.Clear();
+            // Отменяем возможную предыдущую фоновую загрузку данных
+            _loadCts?.Cancel();
 
-                try
-                {
-                    using (var workbook = new XLWorkbook(_currentFilePath))
-                    {
-                        foreach (var ws in workbook.Worksheets)
-                        {
-                            var usedRange = ws.RangeUsed();
-                            if (usedRange != null && usedRange.RowCount() > 0)
-                                cbSheetSelector.Items.Add(ws.Name);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Не удалось загрузить файл Excel: {ex.Message}\n\nФайл может содержать неисправные сводные таблицы.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    _currentFilePath = null;
-                    _isLoading = false;
-                    return;
-                }
+            _currentFilePath = ofd.FileName;
+            _isLoading = true;
+            cbSheetSelector.Items.Clear();
+            _columnConfigTable = null;
+            _invalidRows.Clear();
+            _fileBytes = null;
 
+            loadingIndicator.Visibility = Visibility.Visible;
+            loadingText.Text = "Открытие файла…";
+
+            string filePath = _currentFilePath;
+            List<string> sheetNames = null;
+
+            try
+            {
+                await Task.Run(() =>
+                {
+                    // 1) Читаем файл в оперативную память один раз (диск/сеть — самый долгий этап)
+                    var bytes = System.IO.File.ReadAllBytes(filePath);
+                    _fileBytes = bytes;
+
+                    // 2-3) Распаковываем архив в памяти и читаем список листов из xl/workbook.xml
+                    //      (без полного разбора книги через ClosedXML — почти мгновенно)
+                    sheetNames = XlsxFastReader.GetSheetNames(bytes);
+                });
+            }
+            catch (Exception ex)
+            {
+                loadingIndicator.Visibility = Visibility.Collapsed;
+                MessageBox.Show($"Не удалось загрузить файл Excel: {ex.Message}\n\nФайл может содержать неисправные сводные таблицы.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                _currentFilePath = null;
+                _fileBytes = null;
                 _isLoading = false;
-                if (cbSheetSelector.Items.Count > 0)
+                return;
+            }
+
+            foreach (var name in sheetNames)
+                cbSheetSelector.Items.Add(name);
+
+            loadingIndicator.Visibility = Visibility.Collapsed;
+            _isLoading = false;
+
+            if (cbSheetSelector.Items.Count > 0)
+            {
+                int raskroyIdx = -1;
+                for (int i = 0; i < cbSheetSelector.Items.Count; i++)
                 {
-                    int raskroyIdx = -1;
-                    for (int i = 0; i < cbSheetSelector.Items.Count; i++)
+                    if (cbSheetSelector.Items[i].ToString() == "Раскрой")
                     {
-                        if (cbSheetSelector.Items[i].ToString() == "Раскрой")
-                        {
-                            raskroyIdx = i;
-                            break;
-                        }
+                        raskroyIdx = i;
+                        break;
                     }
-                    cbSheetSelector.SelectedIndex = raskroyIdx >= 0 ? raskroyIdx : 0;
                 }
+                cbSheetSelector.SelectedIndex = raskroyIdx >= 0 ? raskroyIdx : 0;
             }
         }
 
@@ -206,62 +228,201 @@ namespace LinearCutWpf.Controls
                 LoadDataFromSheet(cbSheetSelector.SelectedItem.ToString());
         }
 
-        private void LoadDataFromSheet(string sheetName)
+        /// <summary>
+        /// Вычисляет количество строк, помещающихся в видимую область таблицы (одна "страница").
+        /// </summary>
+        private int CalculatePageSize()
+        {
+            const double rowHeight = 22.0;
+            double height = dgInput.ActualHeight;
+            if (height <= 0) height = dgInput.RenderSize.Height;
+            int size = height > 0 ? (int)(height / rowHeight) : 0;
+            return Math.Max(size, 50);
+        }
+
+        /// <summary>
+        /// Создаёт конфигурацию столбцов на основе заголовков (если ещё не создана)
+        /// и выполняет автоназначение ролей.
+        /// </summary>
+        private void EnsureColumnConfig(List<string> headers)
+        {
+            if (_columnConfigTable != null) return;
+
+            _columnConfigTable = new DataTable();
+            _columnConfigTable.Columns.Add("ColName", typeof(string));
+            _columnConfigTable.Columns.Add("IsKey", typeof(bool));
+            _columnConfigTable.Columns.Add("IsName", typeof(bool));
+            _columnConfigTable.Columns.Add("IsVal", typeof(bool));
+            _columnConfigTable.Columns.Add("IsQty", typeof(bool));
+            _columnConfigTable.Columns.Add("IsLeftAngle", typeof(bool));
+            _columnConfigTable.Columns.Add("IsRightAngle", typeof(bool));
+            _columnConfigTable.Columns.Add("IsColor", typeof(bool));
+
+            foreach (var h in headers)
+                _columnConfigTable.Rows.Add(h, false, false, false, false, false, false, false);
+
+            AutoAssignColumnRoles(_columnConfigTable);
+        }
+
+        /// <summary>
+        /// Строит DataTable из прочитанных в память заголовков и строк.
+        /// </summary>
+        private static DataTable BuildDataTable(List<string> headers, List<string[]> rows)
+        {
+            var dt = new DataTable();
+            foreach (var h in headers)
+                dt.Columns.Add(h);
+
+            foreach (var cells in rows)
+            {
+                var dr = dt.NewRow();
+                for (int i = 0; i < headers.Count; i++)
+                    dr[i] = cells[i] == null ? (object)DBNull.Value : cells[i];
+                dt.Rows.Add(dr);
+            }
+            return dt;
+        }
+
+        /// <summary>
+        /// Асинхронно загружает данные выбранного листа: файл читается в память один раз в фоне,
+        /// первая "страница" строк показывается сразу (чтобы можно было назначать столбцы),
+        /// остальные строки дочитываются в фоне, затем выполняется полная обработка.
+        /// </summary>
+        private async void LoadDataFromSheet(string sheetName)
         {
             if (string.IsNullOrEmpty(_currentFilePath) || string.IsNullOrEmpty(sheetName)) return;
+
+            // Отменяем предыдущую (возможно ещё идущую) загрузку
+            _loadCts?.Cancel();
+            var cts = new CancellationTokenSource();
+            _loadCts = cts;
+            var token = cts.Token;
+
+            string filePath = _currentFilePath;
+            byte[] fileBytes = _fileBytes;
+            int pageSize = CalculatePageSize();
+
+            loadingIndicator.Visibility = Visibility.Visible;
+            loadingText.Text = "Загрузка…";
+            // Интерфейс с данными выключен до заполнения видимой части таблицы
+            dgInput.IsEnabled = false;
+
             try
             {
-                using var workbook = new XLWorkbook(_currentFilePath);
-                var ws = workbook.Worksheet(sheetName);
-                var rawDataTable = new DataTable();
-
-                var headerRow = ws.FirstRowUsed();
-                if (headerRow == null) { MessageBox.Show("Лист пуст!"); return; }
-
-                foreach (var cell in headerRow.CellsUsed())
-                    rawDataTable.Columns.Add(cell.GetString());
-
-                // Создаем конфигурацию столбцов
-                _columnConfigTable = new DataTable();
-                _columnConfigTable.Columns.Add("ColName", typeof(string));
-                _columnConfigTable.Columns.Add("IsKey", typeof(bool));
-                _columnConfigTable.Columns.Add("IsName", typeof(bool));
-                _columnConfigTable.Columns.Add("IsVal", typeof(bool));
-                _columnConfigTable.Columns.Add("IsQty", typeof(bool));
-                _columnConfigTable.Columns.Add("IsLeftAngle", typeof(bool));
-                _columnConfigTable.Columns.Add("IsRightAngle", typeof(bool));
-                _columnConfigTable.Columns.Add("IsColor", typeof(bool));
-
-                foreach (DataColumn c in rawDataTable.Columns)
-                    _columnConfigTable.Rows.Add(c.ColumnName, false, false, false, false, false, false, false);
-
-                // Автоматическое назначение ролей по заголовкам столбцов
-                AutoAssignColumnRoles(_columnConfigTable);
-
-                // Читаем данные
-                foreach (var row in ws.RowsUsed().Skip(1))
+                // === Шаги 2-3: распаковываем архив в памяти и читаем заголовки напрямую ===
+                // Заголовки нужны, чтобы читать строки по индексу; на экран пока не выводим —
+                // сначала заполним видимую часть таблицы данными.
+                List<string> headers = null;
+                if (fileBytes != null)
                 {
-                    DataRow dr = rawDataTable.NewRow();
-                    for (int i = 0; i < rawDataTable.Columns.Count; i++)
-                    {
-                        if (row.Cell(i + 1).IsEmpty())
-                        {
-                            dr[i] = DBNull.Value;
-                        }
-                        else
-                        {
-                            dr[i] = row.Cell(i + 1).GetString().Trim();
-                        }
-                    }
-                    rawDataTable.Rows.Add(dr);
+                    await Task.Run(() => headers = XlsxFastReader.GetHeaders(fileBytes, sheetName), token);
                 }
 
-                // Инициализируем DataStoreService сырыми данными (OnProcessedDataChanged обновит UI)
-                _dataStore.Initialize(rawDataTable, _columnConfigTable, _currentFilePath);
+                token.ThrowIfCancellationRequested();
 
-                DataLoaded?.Invoke(this, EventArgs.Empty);
+                if (headers != null && headers.Count > 0)
+                    EnsureColumnConfig(headers);
+
+                // === Шаг 4: открываем данные как Excel (из памяти) и дочитываем строки в фоне ===
+                await Task.Run(() =>
+                {
+                    List<string> hdrs = headers;
+                    var allRows = new List<string[]>();
+
+                    // Открываем из оперативной памяти (если байты закешированы), иначе с диска
+                    var ms = fileBytes != null
+                        ? new System.IO.MemoryStream(fileBytes, 0, fileBytes.Length, writable: false)
+                        : null;
+                    using (ms)
+                    using (var workbook = ms != null ? new XLWorkbook(ms) : new XLWorkbook(filePath))
+                    {
+                        var ws = workbook.Worksheet(sheetName);
+                        var headerRow = ws.FirstRowUsed();
+                        if (headerRow == null)
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                dgInput.IsEnabled = true;
+                                loadingIndicator.Visibility = Visibility.Collapsed;
+                                MessageBox.Show("Лист пуст!");
+                            });
+                            return;
+                        }
+
+                        // Если быстрый разбор не дал заголовков — берём их из ClosedXML
+                        if (hdrs == null || hdrs.Count == 0)
+                            hdrs = headerRow.CellsUsed().Select(c => c.GetString()).ToList();
+
+                        int colCount = hdrs.Count;
+
+                        bool partialShown = false;
+                        foreach (var row in ws.RowsUsed().Skip(1))
+                        {
+                            token.ThrowIfCancellationRequested();
+
+                            var cells = new string[colCount];
+                            for (int i = 0; i < colCount; i++)
+                            {
+                                var cell = row.Cell(i + 1);
+                                cells[i] = cell.IsEmpty() ? null : cell.GetString().Trim();
+                            }
+                            allRows.Add(cells);
+
+                            // Фаза 1: как только прочитана первая страница — показываем её
+                            if (!partialShown && allRows.Count >= pageSize)
+                            {
+                                partialShown = true;
+                                var pageRows = allRows.GetRange(0, pageSize);
+                                var pageHeaders = hdrs;
+                                Dispatcher.Invoke(() =>
+                                {
+                                    if (token.IsCancellationRequested) return;
+                                    EnsureColumnConfig(pageHeaders);
+                                    var partial = BuildDataTable(pageHeaders, pageRows);
+                                    // Видимая часть таблицы заполнена данными —
+                                    // теперь включаем интерфейс (роли столбцов и т.д.)
+                                    _dataStore.Initialize(partial, _columnConfigTable, filePath);
+                                    dgInput.IsEnabled = true;
+                                });
+                            }
+                        }
+                    } // workbook освобождается здесь — память Excel высвобождается
+
+                    token.ThrowIfCancellationRequested();
+
+                    // === Фаза 2: полная обработка (данные уже в памяти) ===
+                    var headersFinal = hdrs;
+                    var rowsFinal = allRows;
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (token.IsCancellationRequested) return;
+                        EnsureColumnConfig(headersFinal);
+                        var fullTable = BuildDataTable(headersFinal, rowsFinal);
+                        // Используется актуальная _columnConfigTable (с учётом ролей,
+                        // назначенных пользователем во время фоновой загрузки)
+                        _dataStore.Initialize(fullTable, _columnConfigTable, filePath);
+                        DataLoaded?.Invoke(this, EventArgs.Empty);
+                        dgInput.IsEnabled = true;
+                        loadingIndicator.Visibility = Visibility.Collapsed;
+                    });
+
+                    // Высвобождаем память промежуточного буфера
+                    allRows.Clear();
+                }, token);
             }
-            catch (Exception ex) { MessageBox.Show("Ошибка загрузки: " + ex.Message); }
+            catch (OperationCanceledException)
+            {
+                // Загрузка отменена (выбран другой лист или контрол выгружен) — игнорируем
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    dgInput.IsEnabled = true;
+                    loadingIndicator.Visibility = Visibility.Collapsed;
+                    MessageBox.Show("Ошибка загрузки: " + ex.Message);
+                });
+            }
         }
 
         public List<string> GetCheckedCols(string colType)
