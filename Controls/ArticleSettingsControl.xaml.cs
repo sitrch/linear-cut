@@ -276,6 +276,18 @@ namespace LinearCutWpf.Controls
                     totalLength += len * qty;
                 }
 
+                if (qtyCol == null)
+                {
+                    totalCount = group.Count();
+                    totalLength = group.Sum(r =>
+                    {
+                        if (valCol != null && r[valCol] != DBNull.Value && double.TryParse(r[valCol].ToString(), out double parsedLen))
+                            return parsedLen;
+                        return 0;
+                    });
+                }
+                if (totalCount == 0) continue;
+
                 var rowModel = new ArticleGroupingRow
                 {
                     ArticleName = articleName,

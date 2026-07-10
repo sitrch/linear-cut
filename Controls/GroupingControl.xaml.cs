@@ -139,6 +139,22 @@ namespace LinearCutWpf.Controls
         }
 
         /// <summary>
+        /// Возвращает сгруппированные строки исходных данных для всех артикулов.
+        /// Ключ — имя артикула, значение — строки DataRow, как на вкладке «Группировка».
+        /// </summary>
+        public Dictionary<string, DataRow[]> GetGroupedData()
+        {
+            var result = new Dictionary<string, DataRow[]>();
+            foreach (var kvp in _articleGroupingControls)
+            {
+                var rows = kvp.Value.GetArticleRows();
+                if (rows != null && rows.Length > 0)
+                    result[kvp.Key] = rows;
+            }
+            return result;
+        }
+
+        /// <summary>
         /// Возвращает пресет оборудования, который должен применяться для данного артикула 
         /// (индивидуальный или по умолчанию).
         /// </summary>
@@ -233,6 +249,7 @@ namespace LinearCutWpf.Controls
 
             var keys = _getCheckedCols("IsKey");
             var vals = _getCheckedCols("IsVal");
+            var qty = _getCheckedCols("IsQty").FirstOrDefault();
 
             _groupingTabControl.Items.Clear();
             _tabToArticle.Clear();
@@ -262,6 +279,23 @@ namespace LinearCutWpf.Controls
 
                 // Получаем DataView для артикула из хранилища
                 DataView articleView = _dataStore.GetArticleView(articleName);
+
+                // Пропускаем артикулы с нулевым количеством деталей
+                if (!string.IsNullOrEmpty(qty))
+                {
+                    int totalQty = 0;
+                    foreach (DataRowView rowView in articleView)
+                    {
+                        var qtyVal = rowView.Row[qty];
+                        if (qtyVal != DBNull.Value && !string.IsNullOrWhiteSpace(qtyVal?.ToString()))
+                        {
+                            string qtyStr = qtyVal.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                            if (double.TryParse(qtyStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out double q) && q > 0)
+                                totalQty += (int)q;
+                        }
+                    }
+                    if (totalQty == 0) continue;
+                }
 
                 ArticleGroupingControl articleCtrl = new ArticleGroupingControl();
                 
@@ -368,6 +402,23 @@ namespace LinearCutWpf.Controls
                 _tabToArticle[tp] = articleName;
 
                 DataRow[] articleRows = g.ToArray();
+
+                // Пропускаем артикулы с нулевым количеством деталей
+                if (!string.IsNullOrEmpty(qty))
+                {
+                    int totalQty = 0;
+                    foreach (var r in articleRows)
+                    {
+                        var qtyVal = r[qty];
+                        if (qtyVal != DBNull.Value && !string.IsNullOrWhiteSpace(qtyVal?.ToString()))
+                        {
+                            string qtyStr = qtyVal.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                            if (double.TryParse(qtyStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out double q) && q > 0)
+                                totalQty += (int)q;
+                        }
+                    }
+                    if (totalQty == 0) continue;
+                }
 
                 ArticleGroupingControl articleCtrl = new ArticleGroupingControl();
                 

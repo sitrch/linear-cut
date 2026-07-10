@@ -18,7 +18,7 @@
             <ComboBox x:Name="cbReportTypePdf" Width="230" VerticalAlignment="Center" Margin="0,0,15,0" SelectedIndex="0">
                 <ComboBoxItem Content="Подробный отчёт"/>
                 <ComboBoxItem Content="Отчёт об использовании материалов"/>
-                <ComboBoxItem Content="Визуальный отчёт"/>
+                <ComboBoxItem Content="Раскрой"/>
             </ComboBox>
             <TextBlock Text="Коэфф. высоты:" VerticalAlignment="Center" Margin="0,0,5,0"/>
             <TextBox x:Name="txtVisualHeightCoef" Width="50" VerticalAlignment="Center" Margin="0,0,15,0" TextChanged="txtVisualHeightCoef_TextChanged"/>

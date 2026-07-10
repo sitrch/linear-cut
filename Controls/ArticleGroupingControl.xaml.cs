@@ -48,6 +48,12 @@ namespace LinearCutWpf.Controls
         private DataRow[] _articleRows;
         private DataView _articleView;
 
+        /// <summary>Строки исходных данных для данного артикула (из вкладки Группировка).</summary>
+        public DataRow[] GetArticleRows()
+        {
+            return _articleRows ?? _articleView?.Cast<DataRowView>().Select(dvr => dvr.Row).ToArray();
+        }
+
         private ManualCutControl _manualCutControl;
 
         /// <summary>
@@ -338,62 +344,8 @@ namespace LinearCutWpf.Controls
         {
             if (_articleView == null) return;
 
-            var partsList = new ObservableCollection<PartItem>();
-
-            // Группируем по комбинации ключей и значений, чтобы схлопнуть одинаковые детали
-            var groupKeys = _keys.Concat(_vals).ToList();
-            
-            // Преобразуем DataView в список DataRow для группировки
-            var rows = new List<DataRow>();
-            foreach (DataRowView rowView in _articleView)
-            {
-                rows.Add(rowView.Row);
-            }
-
-            foreach (var sg in rows.GroupBy(r => string.Join("|", groupKeys.Select(k => r[k]?.ToString()))))
-            {
-                var firstRow = sg.First();
-                string article = DataHelper.GetArticleName(_keys.Select(k => firstRow[k]?.ToString()));
-                
-                double length = 0;
-                if (_vals.Any() && firstRow[_vals.First()] != DBNull.Value)
-                {
-                    string valStr = firstRow[_vals.First()].ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
-                    double.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out length);
-                }
-
-                int qtySum = 0;
-                if (!string.IsNullOrEmpty(_qty))
-                {
-                    foreach (var r in sg)
-                    {
-                        var qtyVal = r[_qty];
-                        if (qtyVal != DBNull.Value && !string.IsNullOrWhiteSpace(qtyVal?.ToString()))
-                        {
-                            string qtyStr = qtyVal.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
-                            if (double.TryParse(qtyStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out double q) && q > 0)
-                            {
-                                qtySum += (int)q;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    qtySum = sg.Count(); // Если колонки количества нет, считаем строки
-                }
-
-                partsList.Add(new PartItem
-                {
-                    Article = article,
-                    Length = length,
-                    Count = qtySum
-                });
-            }
-
-            // Сортировка по длине по убыванию
-            var sortedParts = partsList.OrderByDescending(p => p.Length).ToList();
-            gridDetails.ItemsSource = sortedParts;
+            var partsList = BuildPartsListFromRows(_articleView.Cast<DataRowView>().Select(dvr => dvr.Row));
+            gridDetails.ItemsSource = partsList;
         }
 
         /// <summary>
@@ -401,15 +353,33 @@ namespace LinearCutWpf.Controls
         /// </summary>
         private void BuildRightPanel(DataRow[] articleRows)
         {
-            var partsList = new ObservableCollection<PartItem>();
+            var partsList = BuildPartsListFromRows(articleRows);
+            gridDetails.ItemsSource = partsList;
+        }
 
-            // Группируем по комбинации ключей и значений, чтобы схлопнуть одинаковые детали
-            var groupKeys = _keys.Concat(_vals).ToList();
-            foreach (var sg in articleRows.GroupBy(r => string.Join("|", groupKeys.Select(k => r[k]?.ToString()))))
+        /// <summary>
+        /// Общий метод: группирует строки по (ключ + длина + углы + цвет),
+        /// суммирует количество, возвращает отсортированный список PartItem.
+        /// </summary>
+        private List<PartItem> BuildPartsListFromRows(IEnumerable<DataRow> rows)
+        {
+            // Колонки для группировки — все назначенные на вкладке «Данные»
+            var groupingCols = new List<string>();
+            groupingCols.AddRange(_keys);
+            groupingCols.AddRange(_vals);
+            groupingCols.AddRange(_getCheckedCols("IsLeftAngle"));
+            groupingCols.AddRange(_getCheckedCols("IsRightAngle"));
+            groupingCols.AddRange(_getCheckedCols("IsColor"));
+
+            if (!groupingCols.Any()) return new List<PartItem>();
+
+            var partsList = new List<PartItem>();
+
+            foreach (var sg in rows.GroupBy(r => string.Join("\0", groupingCols.Select(c => r[c]?.ToString() ?? ""))))
             {
                 var firstRow = sg.First();
                 string article = DataHelper.GetArticleName(_keys.Select(k => firstRow[k]?.ToString()));
-                
+
                 double length = 0;
                 if (_vals.Any() && firstRow[_vals.First()] != DBNull.Value)
                 {
@@ -427,28 +397,38 @@ namespace LinearCutWpf.Controls
                         {
                             string qtyStr = qtyVal.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
                             if (double.TryParse(qtyStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out double q) && q > 0)
-                            {
                                 qtySum += (int)q;
-                            }
                         }
                     }
                 }
                 else
                 {
-                    qtySum = sg.Count(); // Если колонки количества нет, считаем строки
+                    qtySum = sg.Count();
                 }
+
+                if (qtySum <= 0) continue;
+
+                // Углы реза
+                var leftAngleCols = _getCheckedCols("IsLeftAngle");
+                var rightAngleCols = _getCheckedCols("IsRightAngle");
+                var colorCols = _getCheckedCols("IsColor");
+
+                string leftAngle = leftAngleCols.Any() ? (firstRow[leftAngleCols.First()]?.ToString() ?? "") : "";
+                string rightAngle = rightAngleCols.Any() ? (firstRow[rightAngleCols.First()]?.ToString() ?? "") : "";
+                string color = colorCols.Any() ? (firstRow[colorCols.First()]?.ToString() ?? "") : "";
 
                 partsList.Add(new PartItem
                 {
                     Article = article,
                     Length = length,
-                    Count = qtySum
+                    Count = qtySum,
+                    LeftAngle = leftAngle,
+                    RightAngle = rightAngle,
+                    Color = color
                 });
             }
 
-            // Сортировка по длине по убыванию
-            var sortedParts = partsList.OrderByDescending(p => p.Length).ToList();
-            gridDetails.ItemsSource = sortedParts;
+            return partsList.OrderByDescending(p => p.Length).ToList();
         }
 
         private void OnBarLengthChanged(object sender, SelectionChangedEventArgs e)

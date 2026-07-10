@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using LinearCutWpf.Services;
@@ -80,6 +82,10 @@ namespace LinearCutWpf.Controls
         private string _colorColumnName;
         private string _objectName;
 
+        private Dictionary<string, System.Data.DataRow[]> _groupedData;
+        private Dictionary<string, System.Collections.ObjectModel.ObservableCollection<ManualCutRow>> _manualCutsByArticle;
+        private double _cutWidth = 4;
+
         /// <summary>
         /// Загружает данные результатов раскроя для экспорта.
         /// </summary>
@@ -93,7 +99,9 @@ namespace LinearCutWpf.Controls
         /// <param name="leftAngleColumnName">Имя колонки с левым углом реза (опционально).</param>
         /// <param name="rightAngleColumnName">Имя колонки с правым углом реза (опционально).</param>
         /// <param name="colorColumnName">Имя колонки с цветом артикула (опционально).</param>
-        public void LoadData(List<CuttingService.OptimizationResult> results, System.Data.DataTable originalData, List<string> keyColumnNames, string nameColumnName, string valColumnName, string qtyColumnName, string objectName = null, string leftAngleColumnName = null, string rightAngleColumnName = null, string colorColumnName = null)
+        /// <param name="groupedData">Сгруппированные строки данных (из вкладки Группировка) для валидации (опционально).</param>
+        /// <param name="manualCutsByArticle">Ручной раскрой по артикулам для учёта вычтенных деталей в валидации (опционально).</param>
+        public void LoadData(List<CuttingService.OptimizationResult> results, System.Data.DataTable originalData, List<string> keyColumnNames, string nameColumnName, string valColumnName, string qtyColumnName, string objectName = null, string leftAngleColumnName = null, string rightAngleColumnName = null, string colorColumnName = null, Dictionary<string, System.Data.DataRow[]> groupedData = null, double cutWidth = 4, Dictionary<string, System.Collections.ObjectModel.ObservableCollection<ManualCutRow>> manualCutsByArticle = null)
         {
             _originalData = originalData;
             _keyColumnNames = keyColumnNames;
@@ -104,6 +112,9 @@ namespace LinearCutWpf.Controls
             _rightAngleColumnName = rightAngleColumnName;
             _colorColumnName = colorColumnName;
             _objectName = objectName;
+            _groupedData = groupedData;
+            _manualCutsByArticle = manualCutsByArticle;
+            _cutWidth = cutWidth;
             _exportData.Clear();
 
             if (results == null || results.Count == 0)
@@ -180,6 +191,41 @@ namespace LinearCutWpf.Controls
 
             dgExportData.ItemsSource = null;
             dgExportData.ItemsSource = _exportData;
+
+            // Валидация данных раскроя в фоне — не блочим переключение вкладок
+            if (_groupedData != null && !string.IsNullOrEmpty(_valColumnName))
+            {
+                var capturedGrouped = _groupedData;
+                var capturedVal = _valColumnName;
+                var capturedLeft = _leftAngleColumnName;
+                var capturedRight = _rightAngleColumnName;
+                var capturedQty = _qtyColumnName;
+                var capturedResults = results;
+                var capturedManualCuts = _manualCutsByArticle;
+                Task.Run(() =>
+                {
+                    var errors = ValidateVisualReportData(
+                        capturedGrouped,
+                        capturedVal,
+                        capturedLeft,
+                        capturedRight,
+                        capturedQty,
+                        capturedResults,
+                        _cutWidth,
+                        capturedManualCuts);
+                    if (errors.Count > 0)
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            MessageBox.Show(
+                                $"Обнаружены ошибки в данных раскроя:\r\n\r\n{string.Join("\r\n", errors)}",
+                                "Ошибка валидации раскроя",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Warning);
+                        });
+                    }
+                });
+            }
         }
 
         /// <summary>
@@ -200,7 +246,7 @@ namespace LinearCutWpf.Controls
             {
                 0 => "Подробный отчёт",
                 1 => "Отчёт об использовании материалов",
-                2 => "Визуальный отчёт",
+                2 => "Раскрой",
                 _ => "Отчёт"
             };
 
@@ -443,7 +489,7 @@ namespace LinearCutWpf.Controls
             {
                 0 => "Подробный отчёт",
                 1 => "Отчёт об использовании материалов",
-                2 => "Визуальный отчёт",
+                2 => "Раскрой",
                 _ => "Отчёт"
             };
 
@@ -776,6 +822,30 @@ namespace LinearCutWpf.Controls
 
         private void ExportVisualPdf(string fileName, List<ExportRowModel> selectedRows, string reportName)
         {
+            // Валидация правильности размещения деталей перед генерацией визуального отчёта
+            if (_groupedData != null && !string.IsNullOrEmpty(_valColumnName))
+            {
+                var errors = ValidateVisualReportData(
+                    _groupedData,
+                    _valColumnName,
+                    _leftAngleColumnName,
+                    _rightAngleColumnName,
+                    _qtyColumnName,
+                    selectedRows.Select(r => r.ResultData).ToList(),
+                    _cutWidth,
+                    _manualCutsByArticle);
+                if (errors.Count > 0)
+                {
+                    var result = MessageBox.Show(
+                        $"Обнаружены ошибки в данных визуального раскроя:\r\n\r\n{string.Join("\r\n", errors)}\r\n\r\nПродолжить формирование отчёта?",
+                        "Ошибка валидации визуального раскроя",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning);
+                    if (result == MessageBoxResult.No)
+                        return;
+                }
+            }
+
             var document = Document.Create(container =>
             {
                 container.Page(page =>
@@ -791,7 +861,21 @@ namespace LinearCutWpf.Controls
                 });
             });
 
-            document.GeneratePdf(fileName);
+            try
+            {
+                document.GeneratePdf(fileName);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.StartsWith("Ошибка соответствия данных"))
+            {
+                if (File.Exists(fileName))
+                    File.Delete(fileName);
+                MessageBox.Show(
+                    $"Не удалось сформировать визуальный отчёт.\r\n\r\n{ex.Message}\r\n\r\n" +
+                    $"Проверьте соответствие данных в исходной таблице.",
+                    "Ошибка генерации отчёта",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
         }
 
         private void ComposeVisualContent(QuestPDF.Infrastructure.IContainer container, List<ExportRowModel> selectedRows)
@@ -846,7 +930,7 @@ namespace LinearCutWpf.Controls
                         barCol.Item().Text($"{row.Article} Хлыст: {bar.StockLength} мм (Кол-во: {count} хлыстов)");
                         
                         // Отрисовка графической схемы хлыста
-                        string svgString = GenerateVisualBarSvg(800, 80, bar, _originalData, _keyColumnNames, _valColumnName, _leftAngleColumnName, _rightAngleColumnName);
+                        string svgString = GenerateVisualBarSvg(800, 80, bar, _originalData, _keyColumnNames, _leftAngleColumnName, _rightAngleColumnName, _cutWidth);
                         barCol.Item().Svg(svgString);
                     });
                 }
@@ -893,13 +977,13 @@ namespace LinearCutWpf.Controls
             return five;
         }
 
-        private string GenerateVisualBarSvg(float width, float height, CutBarDetailed bar, System.Data.DataTable originalData, List<string> keyColumns, string valColumn, string leftAngleColumn, string rightAngleColumn)
+        private string GenerateVisualBarSvg(float width, float height, CutBarDetailed bar, System.Data.DataTable originalData, List<string> keyColumns, string leftAngleColumn, string rightAngleColumn, double cutWidth)
         {
             var svg = new System.Text.StringBuilder();
             var culture = System.Globalization.CultureInfo.InvariantCulture;
 
             string article = bar.Parts.FirstOrDefault()?.Article;
-            double profileHeight = 25.0; // Значение по умолчанию
+            double profileHeight = 25.0;
             if (!string.IsNullOrEmpty(article))
             {
                 var heights = ProfileHeightService.LoadProfileHeightsWithMetadata();
@@ -925,16 +1009,14 @@ namespace LinearCutWpf.Controls
                 if (barHeight < 5f) barHeight = 5f;
             }
 
-            float dimensionLineY = barHeight + 20f; // Y-координата для размерных линий деталей
-            float totalDimensionLineY = dimensionLineY + 20f; // Y-координата для общей размерной линии
-            float svgHeight = totalDimensionLineY + 15f; // Автоматическая высота
+            float dimensionLineY = barHeight + 20f;
+            float totalDimensionLineY = dimensionLineY + 20f;
+            float svgHeight = totalDimensionLineY + 15f;
 
             svg.AppendLine($"<svg viewBox=\"0 0 {width.ToString(culture)} {svgHeight.ToString(culture)}\" xmlns=\"http://www.w3.org/2000/svg\">");
             
-            // Рисуем общий контур (серый прямоугольник под профиль)
             svg.AppendLine($"<rect x=\"0\" y=\"0\" width=\"{width.ToString(culture)}\" height=\"{barHeight.ToString(culture)}\" fill=\"none\" stroke=\"lightgray\" stroke-width=\"1\" />");
 
-            // Рисуем фоновую штриховку на весь хлыст (будет закрыта полигонами деталей)
             float bgStep = 5f;
             for (float d = 0; d < width + barHeight; d += bgStep)
             {
@@ -956,27 +1038,21 @@ namespace LinearCutWpf.Controls
             float scale = width / (float)bar.StockLength;
             float currentX = 0;
 
-            // Кэшируем доступные детали (строка + оставшееся количество + длина) для поиска углов
-            var availableParts = new List<(System.Data.DataRow Row, int Qty, double Length)>();
-            if (originalData != null && keyColumns != null && keyColumns.Any() && !string.IsNullOrEmpty(valColumn))
+            if (bar.Parts == null || bar.Parts.Count == 0)
+            {
+                svg.AppendLine("</svg>");
+                return svg.ToString();
+            }
+
+            // Строим индекс строк исходной таблицы для артикула (для поиска углов реза)
+            var articleRows = new List<System.Data.DataRow>();
+            if (originalData != null && keyColumns != null && keyColumns.Any())
             {
                 foreach (System.Data.DataRow row in originalData.Rows)
                 {
                     var rowKey = DataHelper.GetArticleName(keyColumns.Select(k => row[k]?.ToString()));
                     if (rowKey == bar.Parts.FirstOrDefault()?.Article)
-                    {
-                        int qty = 0;
-                        if (!string.IsNullOrEmpty(_qtyColumnName) && row[_qtyColumnName] != DBNull.Value)
-                        {
-                            if (int.TryParse(row[_qtyColumnName].ToString(), out int q)) qty = q;
-                        }
-                        double length = 0;
-                        if (row[valColumn] != DBNull.Value && double.TryParse(row[valColumn].ToString(), out double l))
-                        {
-                            length = l;
-                        }
-                        availableParts.Add((row, qty, length));
-                    }
+                        articleRows.Add(row);
                 }
             }
 
@@ -984,42 +1060,29 @@ namespace LinearCutWpf.Controls
             {
                 string lAngle = "90";
                 string rAngle = "90";
-                double originalLength = part.Length; // Fallback
-                
-                // Ищем ближайшую по длине деталь (part.Length содержит припуск на рез)
-                int matchedItemIndex = -1;
-                double minDiff = double.MaxValue;
-                for (int i = 0; i < availableParts.Count; i++)
-                {
-                    if (availableParts[i].Qty > 0)
-                    {
-                        double diff = Math.Abs(availableParts[i].Length - part.Length);
-                        // Поскольку part.Length = Length + CutWidth, diff будет около CutWidth (обычно 2-10 мм)
-                        if (diff < minDiff && diff < 20)
-                        {
-                            minDiff = diff;
-                            matchedItemIndex = i;
-                        }
-                    }
-                }
+                double originalLength = part.Length - cutWidth;
+                if (originalLength < 0) originalLength = 0;
 
-                if (matchedItemIndex >= 0)
+                // Прямой поиск углов реза по OriginalRowIndex (эвристика не используется)
+                if (part.OriginalRowIndex >= 0 && part.OriginalRowIndex < articleRows.Count)
                 {
-                    var item = availableParts[matchedItemIndex];
-                    originalLength = item.Length;
-                    var matchedRow = item.Row;
-                    
+                    var matchedRow = articleRows[part.OriginalRowIndex];
+                    // Верификация: проверяем, что строка действительно соответствует артикулу детали
+                    var rowArticleKey = DataHelper.GetArticleName(keyColumns.Select(k => matchedRow[k]?.ToString()));
+                    if (!string.Equals(rowArticleKey, part.Article, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException(
+                            $"Ошибка соответствия данных: деталь '{part.Article}' длиной {originalLength} мм " +
+                            $"ссылается на строку {part.OriginalRowIndex} с артикулом '{rowArticleKey}'. " +
+                            $"Генерация отчёта прервана.");
+                    }
                     if (!string.IsNullOrEmpty(leftAngleColumn) && matchedRow[leftAngleColumn] != DBNull.Value)
                         lAngle = matchedRow[leftAngleColumn].ToString();
                     if (!string.IsNullOrEmpty(rightAngleColumn) && matchedRow[rightAngleColumn] != DBNull.Value)
                         rAngle = matchedRow[rightAngleColumn].ToString();
-                    
-                    // Уменьшаем количество
-                    availableParts[matchedItemIndex] = (item.Row, item.Qty - 1, item.Length);
                 }
 
-                float actualCutWidth = (float)(part.Length - originalLength);
-                if (actualCutWidth < 0) actualCutWidth = 0;
+                float actualCutWidth = (float)cutWidth;
 
                 float partWidth = (float)originalLength * scale;
                 float sawKerf = actualCutWidth * scale;
@@ -1175,6 +1238,150 @@ namespace LinearCutWpf.Controls
 
             svg.AppendLine("</svg>");
             return svg.ToString();
+        }
+
+        /// <summary>
+        /// Проверяет соответствие длин, углов реза и количества деталей в визуальном отчёте
+        /// данным из вкладки «Группировка». Выявляет ошибки, при которых в схеме раскроя
+        /// отображаются некорректные размеры.
+        /// </summary>
+        /// <param name="groupedData">Сгруппированные строки по артикулам (из GroupingControl.GetGroupedData()).</param>
+        public static List<string> ValidateVisualReportData(
+            Dictionary<string, System.Data.DataRow[]> groupedData,
+            string valColumnName,
+            string leftAngleColumnName,
+            string rightAngleColumnName,
+            string qtyColumnName,
+            List<CuttingService.OptimizationResult> results,
+            double defaultCutWidth = 4,
+            Dictionary<string, System.Collections.ObjectModel.ObservableCollection<ManualCutRow>> manualCutsByArticle = null)
+        {
+            var errors = new List<string>();
+            if (groupedData == null || results == null || string.IsNullOrEmpty(valColumnName))
+                return errors;
+
+            // Собираем все длины из результатов раскроя по артикулам
+            var actualPartsByArticle = new Dictionary<string, List<double>>();
+            foreach (var result in results)
+            {
+                if (result.DetailedBars == null || result.DetailedBars.Count == 0) continue;
+
+                double cutWidth = defaultCutWidth;
+                string searchKey = result.IsManualCut ? result.OriginalGroupKey : result.GroupKey;
+
+                if (!actualPartsByArticle.TryGetValue(searchKey, out var list))
+                {
+                    list = new List<double>();
+                    actualPartsByArticle[searchKey] = list;
+                }
+
+                foreach (var bar in result.DetailedBars)
+                {
+                    if (bar?.Parts == null) continue;
+                    foreach (var part in bar.Parts)
+                    {
+                        if (part == null) continue;
+                        double originalLength = part.Length - cutWidth;
+                        if (originalLength > 0)
+                            list.Add(Math.Round(originalLength, 2));
+                    }
+                }
+            }
+
+            LinearCutWpf.Services.Diagnostic.LogGroupedDataDiagnostics(groupedData, valColumnName, qtyColumnName);
+
+            // Сравниваем с ожидаемыми длинами из groupedData
+            foreach (var kvp in groupedData)
+            {
+                string article = kvp.Key;
+                var articleRows = kvp.Value;
+                if (articleRows == null || articleRows.Length == 0) continue;
+
+                // Собираем ожидаемые длины из строк группировки (с учётом количества)
+                var expectedLengths = new List<double>();
+                foreach (var row in articleRows)
+                {
+                    double length = 0;
+                    if (row[valColumnName] != DBNull.Value)
+                        length = Convert.ToDouble(row[valColumnName]);
+                    if (length <= 0) continue;
+
+                    int qty = Convert.ToInt32(row[qtyColumnName]);
+
+                    for (int i = 0; i < qty; i++)
+                        expectedLengths.Add(Math.Round(length, 2));
+                }
+
+                // Вычитаем детали, попавшие в ручной раскрой (повторяем логику CuttingService.OptimizeAllGroups)
+                if (manualCutsByArticle != null && manualCutsByArticle.TryGetValue(article, out var articleManualCuts))
+                {
+                    var manualParts = new List<double>();
+                    foreach (var mr in articleManualCuts)
+                    {
+                        int mrCount = mr.Count > 0 ? mr.Count : 1;
+                        for (int i = 0; i < mrCount; i++)
+                        {
+                            if (double.TryParse(mr.Size1, out var s1) && s1 > 0) manualParts.Add(s1 + defaultCutWidth);
+                            if (double.TryParse(mr.Size2, out var s2) && s2 > 0) manualParts.Add(s2 + defaultCutWidth);
+                            if (double.TryParse(mr.Size3, out var s3) && s3 > 0) manualParts.Add(s3 + defaultCutWidth);
+                            if (double.TryParse(mr.Size4, out var s4) && s4 > 0) manualParts.Add(s4 + defaultCutWidth);
+                        }
+                    }
+
+                    if (manualParts.Count > 0)
+                    {
+                        var filtered = new List<double>();
+                        foreach (var l in expectedLengths)
+                        {
+                            double lWithCut = l + defaultCutWidth;
+                            int idx = manualParts.FindIndex(mp => Math.Abs(mp - lWithCut) < 0.01);
+                            if (idx >= 0)
+                                manualParts.RemoveAt(idx);
+                            else
+                                filtered.Add(l);
+                        }
+                        expectedLengths = filtered;
+                    }
+                }
+
+                actualPartsByArticle.TryGetValue(article, out var actualLengths);
+                if (actualLengths == null) actualLengths = new List<double>();
+
+                // Сортируем оба списка для сравнения
+                expectedLengths.Sort();
+                actualLengths.Sort();
+
+                if (expectedLengths.Count != actualLengths.Count)
+                {
+                    errors.Add($"[{article}] Количество деталей: ожидалось {expectedLengths.Count}, в отчёте {actualLengths.Count}");
+                    continue;
+                }
+
+                // Сравниваем каждую длину
+                int mismatchCount = 0;
+                for (int i = 0; i < expectedLengths.Count; i++)
+                {
+                    if (Math.Abs(expectedLengths[i] - actualLengths[i]) > 0.5)
+                    {
+                        mismatchCount++;
+                        if (mismatchCount <= 5)
+                            errors.Add($"[{article}] Несовпадение длины #{i}: ожидалось {expectedLengths[i]}, в отчёте {actualLengths[i]}");
+                    }
+                }
+                if (mismatchCount > 5)
+                    errors.Add($"[{article}] ... и ещё {mismatchCount - 5} несовпадений длины");
+            }
+
+            // Проверяем артикулы, которые есть в результатах, но нет в groupedData
+            foreach (var kvp in actualPartsByArticle)
+            {
+                if (!groupedData.ContainsKey(kvp.Key) && kvp.Value.Count > 0)
+                {
+                    errors.Add($"[{kvp.Key}] Артикул есть в результатах раскроя, но отсутствует в данных группировки");
+                }
+            }
+
+            return errors;
         }
 
         private void ComposeFooter(QuestPDF.Infrastructure.IContainer container)

@@ -337,6 +337,9 @@ namespace LinearCutWpf.Models
         public string Article { get; set; }
         public double Length { get; set; }
         public int Count { get; set; }
+        public string LeftAngle { get; set; }
+        public string RightAngle { get; set; }
+        public string Color { get; set; }
         public int OriginalRowIndex { get; set; } = -1;
     }
 

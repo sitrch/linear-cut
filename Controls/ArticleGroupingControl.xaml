@@ -83,6 +83,9 @@
                     <DataGridTextColumn Header="Артикул" Binding="{Binding Article}" />
                     <DataGridTextColumn Header="Длина" Binding="{Binding Length}" />
                     <DataGridTextColumn Header="Количество" Binding="{Binding Count}" />
+                    <DataGridTextColumn Header="Лев.угол" Binding="{Binding LeftAngle}" />
+                    <DataGridTextColumn Header="Прав.угол" Binding="{Binding RightAngle}" />
+                    <DataGridTextColumn Header="Цвет" Binding="{Binding Color}" />
                 </DataGrid.Columns>
             </DataGrid>
 

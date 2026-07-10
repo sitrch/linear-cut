@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 using LinearCutWpf.Models;
 
@@ -170,17 +171,12 @@ namespace LinearCutWpf.Services
                 foreach (DataRow row in groupDt.Rows)
                 {
                     var valObj = row[group.ValueColumnName];
-                    var qtyObj = string.IsNullOrEmpty(group.QtyColumnName) ? null : row[group.QtyColumnName];
-
                     double l = (valObj == null || valObj == DBNull.Value) ? 0 : Convert.ToDouble(valObj);
                     if (l <= 0) continue;
 
-                    int count;
-                    if (qtyObj == null || qtyObj == DBNull.Value || string.IsNullOrWhiteSpace(qtyObj.ToString()))
-                        count = string.IsNullOrEmpty(group.QtyColumnName) ? 1 : 0;
-                    else
-                        count = Convert.ToInt32(qtyObj);
-
+                    if (string.IsNullOrEmpty(group.QtyColumnName))
+                        throw new InvalidOperationException($"QtyColumnName is required for group '{group.GroupKey}'.");
+                    int count = Convert.ToInt32(row[group.QtyColumnName]);
                     if (count <= 0) continue;
 
                     if (inputCounts.ContainsKey(l))
@@ -269,17 +265,13 @@ namespace LinearCutWpf.Services
                 foreach (DataRow row in groupDt.Rows)
                 {
                     var valObj = row[group.ValueColumnName];
-                    var qtyObj = string.IsNullOrEmpty(group.QtyColumnName) ? null : row[group.QtyColumnName];
-
                     double l = (valObj == null || valObj == DBNull.Value) ? 0 : Convert.ToDouble(valObj);
                     if (l <= 0) continue;
 
-                    int count;
-                    if (qtyObj == null || qtyObj == DBNull.Value || string.IsNullOrWhiteSpace(qtyObj.ToString()))
-                        count = string.IsNullOrEmpty(group.QtyColumnName) ? 1 : 0;
-                    else
-                        count = Convert.ToInt32(qtyObj);
-                    
+                    if (string.IsNullOrEmpty(group.QtyColumnName))
+                        throw new InvalidOperationException($"QtyColumnName is required for group '{group.GroupKey}'.");
+                    int count = Convert.ToInt32(row[group.QtyColumnName]);
+
                     inputCount += count;
                     inputLength += l * count;
                 }
@@ -369,8 +361,6 @@ namespace LinearCutWpf.Services
                 foreach (DataRow row in groupDt.Rows)
                 {
                     var valObj = row[group.ValueColumnName];
-                    var qtyObj = string.IsNullOrEmpty(group.QtyColumnName) ? null : row[group.QtyColumnName];
-
                     double l = (valObj == null || valObj == DBNull.Value) ? 0 : Convert.ToDouble(valObj);
                     if (l <= 0) 
                     {
@@ -378,12 +368,10 @@ namespace LinearCutWpf.Services
                         continue;
                     }
 
+                    if (string.IsNullOrEmpty(group.QtyColumnName))
+                        throw new InvalidOperationException($"QtyColumnName is required for group '{group.GroupKey}'.");
                     double lWithCut = l + preset.CutWidth;
-                    int count;
-                    if (qtyObj == null || qtyObj == DBNull.Value || string.IsNullOrWhiteSpace(qtyObj.ToString()))
-                        count = string.IsNullOrEmpty(group.QtyColumnName) ? 1 : 0;
-                    else
-                        count = Convert.ToInt32(qtyObj);
+                    int count = Convert.ToInt32(row[group.QtyColumnName]);
 
                     for (int i = 0; i < count; i++)
                     {
@@ -517,6 +505,8 @@ namespace LinearCutWpf.Services
                 }
             }
 
+            Diagnostic.LogCountDiagnostics(groups, results, enabledStocks, preFilledBars, manualParts);
+
             return results;
         }
 
@@ -627,5 +617,6 @@ namespace LinearCutWpf.Services
                 default: return null;
             }
         }
+
     }
 }

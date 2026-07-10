@@ -43,6 +43,13 @@ namespace LinearCutWpf.Services
         public DataTable ProcessedDataTable { get; private set; }
 
         /// <summary>
+        /// Очищенная и сгруппированная таблица: удалены строки с нулевой длиной,
+        /// строки сгруппированы по ключу + длина + углы реза + цвет,
+        /// количества суммированы. Используется на вкладке «Группировка» и далее.
+        /// </summary>
+        public DataTable GroupedAndCleanDataTable { get; private set; }
+
+        /// <summary>
         /// Таблица конфигурации столбцов (роли: IsKey, IsName, IsVal, IsQty, IsLeftAngle, IsRightAngle, Color).
         /// </summary>
         public DataTable ColumnConfigTable { get; private set; }
@@ -205,6 +212,84 @@ namespace LinearCutWpf.Services
             }
 
             ProcessedDataChanged?.Invoke(this, EventArgs.Empty);
+
+            BuildGroupedAndCleanDataTable();
+        }
+
+        /// <summary>
+        /// Строит <see cref="GroupedAndCleanDataTable"/>: отфильтровывает строки с IsVal ≤ 0,
+        /// группирует по (IsKey + IsVal + IsLeftAngle + IsRightAngle + IsColor), суммирует IsQty.
+        /// </summary>
+        private void BuildGroupedAndCleanDataTable()
+        {
+            GroupedAndCleanDataTable = null;
+            if (ProcessedDataTable == null) return;
+
+            var keys = GetKeyColumns();
+            var vals = GetColumnsByType("IsVal");
+            var qtys = GetColumnsByType("IsQty");
+            var leftAngles = GetColumnsByType("IsLeftAngle");
+            var rightAngles = GetColumnsByType("IsRightAngle");
+            var colors = GetColumnsByType("IsColor");
+
+            if (!keys.Any() || !vals.Any()) return;
+
+            string valCol = vals.First();
+            string qtyCol = qtys.FirstOrDefault();
+
+            // 1. Фильтр: строки с длиной > 0
+            var filtered = ProcessedDataTable.AsEnumerable()
+                .Where(r => r[valCol] != DBNull.Value)
+                .Select(r =>
+                {
+                    string s = r[valCol].ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                    double.TryParse(s, System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.CurrentCulture, out double len);
+                    return new { Row = r, Length = len };
+                })
+                .Where(x => x.Length > 0)
+                .Select(x => x.Row)
+                .ToList();
+
+            if (filtered.Count == 0) return;
+
+            // 2. Группировка по (IsKey + IsVal + IsLeftAngle + IsRightAngle + IsColor)
+            var groupingCols = new List<string>();
+            groupingCols.AddRange(keys);
+            groupingCols.Add(valCol);
+            groupingCols.AddRange(leftAngles);
+            groupingCols.AddRange(rightAngles);
+            groupingCols.AddRange(colors);
+
+            GroupedAndCleanDataTable = ProcessedDataTable.Clone();
+
+            foreach (var sg in filtered.GroupBy(r => string.Join("\0", groupingCols.Select(c => r[c]?.ToString() ?? ""))))
+            {
+                var first = sg.First();
+                var newRow = GroupedAndCleanDataTable.NewRow();
+
+                foreach (DataColumn col in ProcessedDataTable.Columns)
+                    newRow[col.ColumnName] = first[col.ColumnName];
+
+                if (!string.IsNullOrEmpty(qtyCol))
+                {
+                    int totalQty = 0;
+                    foreach (var r in sg)
+                    {
+                        var qObj = r[qtyCol];
+                        if (qObj != DBNull.Value && !string.IsNullOrWhiteSpace(qObj?.ToString()))
+                        {
+                            string qStr = qObj.ToString().Replace(" ", "").Replace("\u00A0", "").Replace('.', ',');
+                            if (double.TryParse(qStr, System.Globalization.NumberStyles.Any,
+                                System.Globalization.CultureInfo.CurrentCulture, out double q) && q > 0)
+                                totalQty += (int)q;
+                        }
+                    }
+                    newRow[qtyCol] = totalQty > 0 ? totalQty.ToString() : "0";
+                }
+
+                GroupedAndCleanDataTable.Rows.Add(newRow);
+            }
         }
 
         /// <summary>
@@ -245,14 +330,16 @@ namespace LinearCutWpf.Services
 
         /// <summary>
         /// Получает DataView отфильтрованный по артикулу.
+        /// Если доступна <see cref="GroupedAndCleanDataTable"/>, используется она.
         /// </summary>
         /// <param name="articleKey">Ключ артикула.</param>
         /// <returns>DataView с отфильтрованными строками.</returns>
         public DataView GetArticleView(string articleKey)
         {
-            if (ProcessedDataTable == null) return null;
+            var source = GroupedAndCleanDataTable ?? ProcessedDataTable;
+            if (source == null) return null;
 
-            var view = new DataView(ProcessedDataTable);
+            var view = new DataView(source);
             if (string.IsNullOrEmpty(articleKey))
             {
                 view.RowFilter = "([_ArticleKey_] IS NULL OR [_ArticleKey_] = '')";
@@ -266,14 +353,16 @@ namespace LinearCutWpf.Services
         }
 
         /// <summary>
-        /// Получает список уникальных артикулов.
+        /// Получает список уникальных артикулов из <see cref="GroupedAndCleanDataTable"/>
+        /// или <see cref="ProcessedDataTable"/>.
         /// </summary>
         public List<string> GetUniqueArticles()
         {
-            if (ProcessedDataTable == null) return new List<string>();
+            var source = GroupedAndCleanDataTable ?? ProcessedDataTable;
+            if (source == null) return new List<string>();
 
             var articles = new List<string>();
-            foreach (DataRow row in ProcessedDataTable.Rows)
+            foreach (DataRow row in source.Rows)
             {
                 string key = row["_ArticleKey_"]?.ToString();
                 if (!string.IsNullOrEmpty(key) && !articles.Contains(key))

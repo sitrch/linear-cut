@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -158,6 +159,32 @@ namespace LinearCutWpf
 
                 if (e.RemovedItems.Count > 0 && e.RemovedItems[0] is TabItem removedTab2 && removedTab2.Header?.ToString() == "Данные")
                 {
+                    var keys = dataSettingsControl.GetCheckedCols("IsKey");
+                    var vals = dataSettingsControl.GetCheckedCols("IsVal");
+                    var qtys = dataSettingsControl.GetCheckedCols("IsQty");
+
+                    if (!keys.Any())
+                    {
+                        MessageBox.Show("Не назначен столбец «Артикул» (ключевой столбец). Переход на другую вкладку невозможен.", "Настройка колонок", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        _isRevertingTab = true;
+                        Dispatcher.BeginInvoke(new System.Action(() => { tabControl.SelectedItem = removedTab2; _isRevertingTab = false; }));
+                        return;
+                    }
+                    if (!vals.Any())
+                    {
+                        MessageBox.Show("Не назначен столбец «Длина». Переход на другую вкладку невозможен.", "Настройка колонок", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        _isRevertingTab = true;
+                        Dispatcher.BeginInvoke(new System.Action(() => { tabControl.SelectedItem = removedTab2; _isRevertingTab = false; }));
+                        return;
+                    }
+                    if (!qtys.Any())
+                    {
+                        MessageBox.Show("Не назначен столбец «Количество». Переход на другую вкладку невозможен.", "Настройка колонок", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        _isRevertingTab = true;
+                        Dispatcher.BeginInvoke(new System.Action(() => { tabControl.SelectedItem = removedTab2; _isRevertingTab = false; }));
+                        return;
+                    }
+
                     if (!dataSettingsControl.ValidateData())
                     {
                         _isRevertingTab = true;
@@ -248,7 +275,7 @@ namespace LinearCutWpf
             var colorCols = dataSettingsControl.GetCheckedCols("IsColor");
             var qtyCol = qtyList.FirstOrDefault();
 
-            if (!keys.Any() || !vals.Any()) return;
+            if (!keys.Any() || !vals.Any() || !qtyList.Any()) return;
 
             var optimizer = new Services.CuttingService();
             var results = new System.Collections.Generic.List<Services.CuttingService.OptimizationResult>();
@@ -261,9 +288,12 @@ namespace LinearCutWpf
                 if (string.IsNullOrWhiteSpace(groupKey)) continue;
 
                 var articleView = DataStoreService.Instance.GetArticleView(groupKey);
-                var dt = dataSettingsControl.MainDataTable.Clone();
+                var sourceTable = DataStoreService.Instance.GroupedAndCleanDataTable ?? dataSettingsControl.MainDataTable;
+                var dt = sourceTable.Clone();
                 foreach (DataRowView drv in articleView)
                     dt.ImportRow(drv.Row);
+
+                Diagnostic.LogDtBuildDiagnostics(articleView, dt, vals.First(), qtyCol, groupKey);
 
                 var articleSettings = groupingControl.GetOrCreateArticleSettings(groupKey);
                 var preset = groupingControl.GetEffectivePreset(groupKey);
@@ -396,7 +426,34 @@ namespace LinearCutWpf
                 string leftAngleCol = dataSettingsControl.GetCheckedCols("IsLeftAngle").FirstOrDefault();
                 string rightAngleCol = dataSettingsControl.GetCheckedCols("IsRightAngle").FirstOrDefault();
                 string colorCol = dataSettingsControl.GetCheckedCols("IsColor").FirstOrDefault();
-                exportControlObj.LoadData(results, dataSettingsControl.MainDataTable, keyColumnNames, nameColumnName, valColumnName, qtyCol, objectName, leftAngleCol, rightAngleCol, colorCol);
+                var groupedTable = DataStoreService.Instance.GroupedAndCleanDataTable ?? dataSettingsControl.MainDataTable;
+                // Строим groupedData напрямую из GroupedAndCleanDataTable (единый источник)
+                var groupedData = new Dictionary<string, DataRow[]>();
+                if (DataStoreService.Instance.GroupedAndCleanDataTable != null)
+                {
+                    foreach (var article in uniqueArticles)
+                    {
+                        var articleView = DataStoreService.Instance.GetArticleView(article);
+                        var rows = articleView.Cast<DataRowView>().Select(drv => drv.Row).ToArray();
+                        if (rows.Length > 0)
+                            groupedData[article] = rows;
+
+                        Diagnostic.LogArticleViewDiagnostics(articleView, valColumnName, qtyCol, article);
+                    }
+                }
+                else
+                {
+                    groupedData = groupingControl.GetGroupedData();
+                }
+                // Собираем ручной раскрой по артикулам для валидации
+                var manualCutsByArticle = new Dictionary<string, ObservableCollection<ManualCutRow>>();
+                foreach (var article in uniqueArticles)
+                {
+                    var articleSettings = groupingControl.GetOrCreateArticleSettings(article);
+                    if (articleSettings.ManualCuts != null && articleSettings.ManualCuts.Any())
+                        manualCutsByArticle[article] = articleSettings.ManualCuts;
+                }
+                exportControlObj.LoadData(results, groupedTable, keyColumnNames, nameColumnName, valColumnName, qtyCol, objectName, leftAngleCol, rightAngleCol, colorCol, groupedData, dataSettingsControl.DefaultPreset?.CutWidth ?? 4, manualCutsByArticle);
             }
         }
     }
