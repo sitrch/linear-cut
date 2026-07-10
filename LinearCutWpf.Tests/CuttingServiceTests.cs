@@ -487,6 +487,54 @@ namespace LinearCutWpf.Tests
             Assert.Empty(errors);
         }
 
+        [Fact]
+        public void ValidateVisualReportData_SkipsUnselectedArticles()
+        {
+            // Исходные данные содержат два артикула, но для сохранения выбран только "A".
+            var groupedData = new Dictionary<string, DataRow[]>
+            {
+                { "A", new[] { CreateRow("1000", "2") } },
+                { "B", new[] { CreateRow("500", "1") } }
+            };
+
+            var results = new List<CuttingService.OptimizationResult>
+            {
+                new CuttingService.OptimizationResult
+                {
+                    GroupKey = "A",
+                    DetailedBars = new List<CutBarDetailed>
+                    {
+                        new CutBarDetailed
+                        {
+                            StockLength = 6000,
+                            Parts = new List<PartItem>
+                            {
+                                new PartItem { Length = 1004, Article = "A" },
+                                new PartItem { Length = 1004, Article = "A" }
+                            }
+                        }
+                    }
+                }
+            };
+
+            // До фикса: валидация по всему groupedData давала ложную ошибку для "B"
+            // ("ожидалось 1, в отчёте 0"), хотя он не выбран для сохранения.
+            var errorsFull = ExportControl.ValidateVisualReportData(
+                groupedData, "Длина", null, null, "Количество", results, 4, null);
+            Assert.Contains(errorsFull, e => e.Contains("[B]"));
+
+            // После фикса ExportVisualPdf фильтрует groupedData по выбранным артикулам.
+            var selectedKeys = new HashSet<string>(
+                results.Select(r => r.IsManualCut ? r.OriginalGroupKey : r.GroupKey));
+            var filteredGroupedData = groupedData
+                .Where(kvp => selectedKeys.Contains(kvp.Key))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+            var errorsFiltered = ExportControl.ValidateVisualReportData(
+                filteredGroupedData, "Длина", null, null, "Количество", results, 4, null);
+            Assert.Empty(errorsFiltered);
+        }
+
         private static DataRow CreateRow(string length, string qty)
         {
             var dt = new DataTable();

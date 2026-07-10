@@ -13,16 +13,10 @@
 
         <!-- Верхняя панель с кнопками -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
-            <Button x:Name="btnExportExcel" Content="Экспорт в Excel" Padding="10,5" Margin="0,0,10,0" Click="BtnExportExcel_Click"/>
-            <TextBlock Text="Тип отчёта:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-            <ComboBox x:Name="cbReportTypePdf" Width="230" VerticalAlignment="Center" Margin="0,0,15,0" SelectedIndex="0">
-                <ComboBoxItem Content="Подробный отчёт"/>
-                <ComboBoxItem Content="Отчёт об использовании материалов"/>
-                <ComboBoxItem Content="Раскрой"/>
-            </ComboBox>
+            <Button x:Name="btnExportRaskroj" Content="Раскрой" Padding="10,5" Margin="0,0,10,0" Click="BtnExportRaskroj_Click"/>
             <TextBlock Text="Коэфф. высоты:" VerticalAlignment="Center" Margin="0,0,5,0"/>
             <TextBox x:Name="txtVisualHeightCoef" Width="50" VerticalAlignment="Center" Margin="0,0,15,0" TextChanged="txtVisualHeightCoef_TextChanged"/>
-            <Button x:Name="btnExportPdf" Content="Экспорт в PDF" Padding="10,5" Click="BtnExportPdf_Click"/>
+            <Button x:Name="btnExportMaterials" Content="Материалы" Padding="10,5" Margin="0,0,10,0" Click="BtnExportMaterials_Click"/>
         </StackPanel>
 
         <!-- Таблица для выбора артикулов на выгрузку -->
@@ -53,5 +47,14 @@
                 <DataGridTextColumn Header="Количество хлыстов" Binding="{Binding StockCount}" IsReadOnly="True" Width="130" ElementStyle="{StaticResource ManualCutCellStyle}"/>
             </DataGrid.Columns>
         </DataGrid>
+
+        <!-- Исчезающий баллун-уведомление об успешном сохранении -->
+        <Border x:Name="toast" Visibility="Collapsed"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Padding="16,10" Background="#EE2E7D32" CornerRadius="4"
+                Opacity="0">
+            <TextBlock x:Name="toastText" Text="" Foreground="White"
+                       FontWeight="SemiBold" VerticalAlignment="Center"/>
+        </Border>
     </Grid>
 </UserControl>

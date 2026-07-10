@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media.Animation;
 using LinearCutWpf.Services;
 using LinearCutWpf.Models;
 using QuestPDF.Fluent;
@@ -229,10 +230,10 @@ namespace LinearCutWpf.Controls
         }
 
         /// <summary>
-        /// Обработчик нажатия кнопки экспорта в Excel.
-        /// Генерирует файл XLSX с выбранными результатами.
+        /// Обработчик нажатия кнопки "Материалы".
+        /// Сохраняет отчёт об использовании материалов в формате Excel (XLSX).
         /// </summary>
-        private void BtnExportExcel_Click(object sender, RoutedEventArgs e)
+        private void BtnExportMaterials_Click(object sender, RoutedEventArgs e)
         {
             var selectedRows = _exportData.Where(x => x.IsSelected).ToList();
             if (selectedRows.Count == 0)
@@ -241,19 +242,13 @@ namespace LinearCutWpf.Controls
                 return;
             }
 
-            int reportTypeIndex = cbReportTypePdf.SelectedIndex;
-            string reportName = reportTypeIndex switch
-            {
-                0 => "Подробный отчёт",
-                1 => "Отчёт об использовании материалов",
-                2 => "Раскрой",
-                _ => "Отчёт"
-            };
+            int reportTypeIndex = 1; // Отчёт об использовании материалов
+            string reportName = "Материалы";
 
             var sfd = new Microsoft.Win32.SaveFileDialog
             {
                 Filter = "Excel Files|*.xlsx",
-                Title = "Сохранить результат раскроя",
+                Title = "Сохранить отчёт об использовании материалов",
                 FileName = string.IsNullOrWhiteSpace(_objectName) ? $"{reportName}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx" : $"{reportName}_{_objectName}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
             };
 
@@ -458,7 +453,7 @@ namespace LinearCutWpf.Controls
                         workbook.SaveAs(sfd.FileName);
                     }
 
-                    MessageBox.Show("Файл успешно сохранен!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                    ShowToast("Файл успешно сохранен!");
                 }
                 catch (Exception ex)
                 {
@@ -468,10 +463,10 @@ namespace LinearCutWpf.Controls
         }
 
         /// <summary>
-        /// Обработчик нажатия кнопки экспорта в PDF.
-        /// Генерирует файл PDF в зависимости от выбранного типа отчета.
+        /// Обработчик нажатия кнопки "Раскрой".
+        /// Сохраняет раскрой в формате PDF.
         /// </summary>
-        private void BtnExportPdf_Click(object sender, RoutedEventArgs e)
+        private void BtnExportRaskroj_Click(object sender, RoutedEventArgs e)
         {
             var selectedRows = _exportData.Where(x => x.IsSelected).ToList();
             if (selectedRows.Count == 0)
@@ -480,23 +475,16 @@ namespace LinearCutWpf.Controls
                 return;
             }
 
-            int reportTypeIndex = cbReportTypePdf.SelectedIndex;
-            bool isDetailedPdf = reportTypeIndex == 0;
-            bool isMaterialPdf = reportTypeIndex == 1;
-            bool isVisualPdf = reportTypeIndex == 2;
+            bool isDetailedPdf = false;
+            bool isMaterialPdf = false;
+            bool isVisualPdf = true;
 
-            string reportName = reportTypeIndex switch
-            {
-                0 => "Подробный отчёт",
-                1 => "Отчёт об использовании материалов",
-                2 => "Раскрой",
-                _ => "Отчёт"
-            };
+            string reportName = "Раскрой";
 
             var sfd = new Microsoft.Win32.SaveFileDialog
             {
                 Filter = "PDF Files|*.pdf",
-                Title = "Сохранить результат раскроя",
+                Title = "Сохранить раскрой",
                 FileName = string.IsNullOrWhiteSpace(_objectName) ? $"{reportName}_{DateTime.Now:yyyyMMdd_HHmm}.pdf" : $"{reportName}_{_objectName}_{DateTime.Now:yyyyMMdd_HHmm}.pdf"
             };
 
@@ -530,13 +518,51 @@ namespace LinearCutWpf.Controls
                         document.GeneratePdf(sfd.FileName);
                     }
 
-                    MessageBox.Show("Файл успешно сохранен!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                    ShowToast("Файл успешно сохранен!");
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Ошибка при сохранении файла: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
+        }
+
+        private System.Windows.Threading.DispatcherTimer _toastTimer;
+
+        /// <summary>
+        /// Показывает исчезающий баллун-уведомление об успешном действии (аналог индикатора при загрузке Excel).
+        /// </summary>
+        private void ShowToast(string message)
+        {
+            toastText.Text = message;
+            toast.Visibility = Visibility.Visible;
+
+            var fadeIn = new DoubleAnimation(1, TimeSpan.FromMilliseconds(200));
+            var sbIn = new Storyboard();
+            sbIn.Children.Add(fadeIn);
+            Storyboard.SetTarget(fadeIn, toast);
+            Storyboard.SetTargetProperty(fadeIn, new PropertyPath(Border.OpacityProperty));
+            sbIn.Begin();
+
+            if (_toastTimer == null)
+            {
+                _toastTimer = new System.Windows.Threading.DispatcherTimer();
+                _toastTimer.Tick += (s, e) =>
+                {
+                    _toastTimer.Stop();
+
+                    var fadeOut = new DoubleAnimation(0, TimeSpan.FromMilliseconds(400));
+                    var sbOut = new Storyboard();
+                    sbOut.Children.Add(fadeOut);
+                    Storyboard.SetTarget(fadeOut, toast);
+                    Storyboard.SetTargetProperty(fadeOut, new PropertyPath(Border.OpacityProperty));
+                    sbOut.Completed += (_, __) => toast.Visibility = Visibility.Collapsed;
+                    sbOut.Begin();
+                };
+            }
+
+            _toastTimer.Interval = TimeSpan.FromSeconds(2);
+            _toastTimer.Start();
         }
 
         private void ComposeHeader(QuestPDF.Infrastructure.IContainer container, string reportName)
@@ -561,97 +587,7 @@ namespace LinearCutWpf.Controls
             {
                 if (isMaterialPdf || isDetailedPdf)
                 {
-                    // Сводная таблица
-                    column.Item().PaddingBottom(5).Text("Сводная таблица раскроя").FontSize(14).SemiBold();
-                    
-                    column.Item().Table(table =>
-                    {
-                    table.ColumnsDefinition(columns =>
-                    {
-                        columns.RelativeColumn();
-                        columns.RelativeColumn();
-                        columns.RelativeColumn();
-                        columns.RelativeColumn();
-                        columns.RelativeColumn();
-                        columns.RelativeColumn();
-                        columns.RelativeColumn();
-                    });
-
-                        table.Header(header =>
-                        {
-                            header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Артикул").SemiBold();
-                            header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Наименование").SemiBold();
-                            header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Цвет").SemiBold();
-                            header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Хлыст").SemiBold();
-                            header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Кол-во").SemiBold();
-                            header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Длина (м)").SemiBold();
-                            header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("%Использования").SemiBold();
-                        });
-
-                        foreach (var row in selectedRows)
-                        {
-                            var result = row.ResultData;
-                            if (result?.UsedStocks != null)
-                            {
-                                foreach (var stock in result.UsedStocks)
-                                {
-                                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(row.Article);
-                                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(row.Name);
-                                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(row.Color);
-                                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(stock.Key.ToString());
-                                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(stock.Value.ToString());
-                                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(Math.Round(stock.Key * stock.Value / 1000.0, 2).ToString("F2"));
-                                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(Math.Round(result.MaterialUtilizationRate, 2).ToString());
-                                }
-                            }
-                        }
-                    });
-
-                    int totalPartsCount = 0;
-                    double totalPartsLength = 0;
-                    double totalStockLength = 0;
-                    double totalRemainderLength = 0;
-
-                    foreach (var row in selectedRows)
-                    {
-                        if (row.ResultData != null)
-                        {
-                            totalPartsCount += row.ResultData.TotalPartsCount;
-                            totalPartsLength += row.ResultData.TotalPartsLength;
-                            totalStockLength += row.ResultData.TotalStockLength;
-                            totalRemainderLength += row.ResultData.TotalRemainderLength;
-                        }
-                    }
-
-                    double overallKpd = totalStockLength > 0 ? (totalPartsLength / totalStockLength) * 100 : 0;
-
-                    column.Item().PaddingTop(10).Background("#F8F8F8").Padding(5).Column(statCol =>
-                    {
-                        statCol.Item().Text("Общая статистика:").SemiBold();
-                        statCol.Item().Table(table =>
-                        {
-                            table.ColumnsDefinition(columns =>
-                            {
-                                columns.RelativeColumn();
-                                columns.RelativeColumn();
-                            });
-
-                            table.Cell().Padding(2).Text("Всего деталей:");
-                            table.Cell().Padding(2).Text(totalPartsCount.ToString());
-
-                            table.Cell().Padding(2).Text("Общая длина деталей:");
-                            table.Cell().Padding(2).Text((totalPartsLength / 1000).ToString("F2") + " м");
-
-                            table.Cell().Padding(2).Text("Общая длина хлыстов:");
-                            table.Cell().Padding(2).Text((totalStockLength / 1000).ToString("F2") + " м");
-
-                            table.Cell().Padding(2).Text("Общая длина остатков:");
-                            table.Cell().Padding(2).Text((totalRemainderLength / 1000).ToString("F2") + " м");
-
-                            table.Cell().Padding(2).Text("%ИспМат:");
-                            table.Cell().Padding(2).Text(Math.Round(overallKpd, 2).ToString("F2") + "%");
-                        });
-                    });
+                    ComposeMaterialUsageReport(column, selectedRows);
                 }
                 
                 if (isDetailedPdf)
@@ -663,6 +599,106 @@ namespace LinearCutWpf.Controls
                         column.Item().PaddingBottom(15).Element(c => ComposeArticleTable(c, row));
                     }
                 }
+            });
+        }
+
+        /// <summary>
+        /// Формирует блок "Отчёт об использовании материалов" (сводная таблица раскроя и общая статистика).
+        /// Используется в PDF-отчёте об использовании материалов, а также выводится в начале
+        /// визуального раскроя перед детализацией по артикулам.
+        /// </summary>
+        private void ComposeMaterialUsageReport(QuestPDF.Fluent.ColumnDescriptor column, List<ExportRowModel> selectedRows)
+        {
+            // Сводная таблица
+            column.Item().PaddingBottom(5).Text("Отчёт об использовании материалов").FontSize(14).SemiBold();
+
+            column.Item().Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(2);  // Артикул
+                    columns.RelativeColumn(5);  // Наименование (перенос текста)
+                    columns.RelativeColumn(1);  // Цвет
+                    columns.RelativeColumn(1);  // Хлыст
+                    columns.RelativeColumn(1);  // Кол-во
+                    columns.RelativeColumn(1);  // Длина (м)
+                    columns.RelativeColumn(1);  // %Использования
+                });
+
+                table.Header(header =>
+                {
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Артикул").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Наименование").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Цвет").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Хлыст").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Кол-во").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("Длина (м)").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(2).Text("%Использования").SemiBold();
+                });
+
+                foreach (var row in selectedRows)
+                {
+                    var result = row.ResultData;
+                    if (result?.UsedStocks != null)
+                    {
+                        foreach (var stock in result.UsedStocks)
+                        {
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(row.Article);
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).AlignLeft().Text(row.Name);
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(row.Color);
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(stock.Key.ToString());
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(stock.Value.ToString());
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(Math.Round(stock.Key * stock.Value / 1000.0, 2).ToString("F2"));
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(2).Text(Math.Round(result.MaterialUtilizationRate, 2).ToString());
+                        }
+                    }
+                }
+            });
+
+            int totalPartsCount = 0;
+            double totalPartsLength = 0;
+            double totalStockLength = 0;
+            double totalRemainderLength = 0;
+
+            foreach (var row in selectedRows)
+            {
+                if (row.ResultData != null)
+                {
+                    totalPartsCount += row.ResultData.TotalPartsCount;
+                    totalPartsLength += row.ResultData.TotalPartsLength;
+                    totalStockLength += row.ResultData.TotalStockLength;
+                    totalRemainderLength += row.ResultData.TotalRemainderLength;
+                }
+            }
+
+            double overallKpd = totalStockLength > 0 ? (totalPartsLength / totalStockLength) * 100 : 0;
+
+            column.Item().PaddingTop(10).Background("#F8F8F8").Padding(5).Column(statCol =>
+            {
+                statCol.Item().Text("Общая статистика:").SemiBold();
+                statCol.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn();
+                        columns.RelativeColumn();
+                    });
+
+                    table.Cell().Padding(2).Text("Всего деталей:");
+                    table.Cell().Padding(2).Text(totalPartsCount.ToString());
+
+                    table.Cell().Padding(2).Text("Общая длина деталей:");
+                    table.Cell().Padding(2).Text((totalPartsLength / 1000).ToString("F2") + " м");
+
+                    table.Cell().Padding(2).Text("Общая длина хлыстов:");
+                    table.Cell().Padding(2).Text((totalStockLength / 1000).ToString("F2") + " м");
+
+                    table.Cell().Padding(2).Text("Общая длина остатков:");
+                    table.Cell().Padding(2).Text((totalRemainderLength / 1000).ToString("F2") + " м");
+
+                    table.Cell().Padding(2).Text("%ИспМат:");
+                    table.Cell().Padding(2).Text(Math.Round(overallKpd, 2).ToString("F2") + "%");
+                });
             });
         }
 
@@ -825,8 +861,18 @@ namespace LinearCutWpf.Controls
             // Валидация правильности размещения деталей перед генерацией визуального отчёта
             if (_groupedData != null && !string.IsNullOrEmpty(_valColumnName))
             {
+                // Валидируем только выбранные для сохранения артикулы, иначе невыбранные
+                // артикулы ошибочно дают расхождение "ожидалось N, в отчёте 0".
+                var selectedKeys = new HashSet<string>(
+                    selectedRows.Select(r => r.ResultData.IsManualCut
+                        ? r.ResultData.OriginalGroupKey
+                        : r.ResultData.GroupKey));
+                var filteredGroupedData = _groupedData
+                    .Where(kvp => selectedKeys.Contains(kvp.Key))
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
                 var errors = ValidateVisualReportData(
-                    _groupedData,
+                    filteredGroupedData,
                     _valColumnName,
                     _leftAngleColumnName,
                     _rightAngleColumnName,
@@ -882,6 +928,14 @@ namespace LinearCutWpf.Controls
         {
             container.PaddingVertical(1, Unit.Centimetre).Column(column =>
             {
+                // Отчёт об использовании материалов — в начале документа (первая страница)
+                ComposeMaterialUsageReport(column, selectedRows);
+
+                // Данные раскроя начинаются с новой страницы
+                column.Item().PageBreak();
+
+                column.Item().PaddingTop(15);
+
                 for (int i = 0; i < selectedRows.Count; i++)
                 {
                     column.Item().Element(c => ComposeVisualArticle(c, selectedRows[i]));
